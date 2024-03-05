@@ -6,7 +6,7 @@
 
 %global real_version     1.2.14
 %global rpm_version      1.2.14
-%global release_version  1
+%global release_version  3
 
 %global real_version_major %(printf '%s' '%{real_version}' | sed -n 's/^\\([1-9][0-9]*\\.[1-9][0-9]*\\)\\.[1-9][0-9]*$/\\1/p')
 
@@ -17,12 +17,13 @@
 Summary:   NetworkManager VPN plug-in for IPsec VPN
 Name:      NetworkManager-libreswan
 Version:   %{rpm_version}
-Release:   %{release_version}%{?dist}.3
+Release:   %{release_version}%{?dist}
 License:   GPLv2+
 URL:       http://www.gnome.org/projects/NetworkManager/
 Source0:   https://download.gnome.org/sources/NetworkManager-libreswan/%{real_version_major}/%{name}-%{real_version}.tar.xz
 
-#Patch1: 0001-some.patch
+Patch1: 0001-add-dpd-authby-and-ipsec-interface-support.patch
+Patch2: 0002-support-missing-features-ipv4.patch
 
 BuildRequires: make
 BuildRequires:  gcc
@@ -116,6 +117,14 @@ rm -f %{buildroot}%{_libdir}/NetworkManager/lib*.la
 
 
 %changelog
+* Wed Jan 17 2024 Fernando Fernandez Mancera <ferferna@redhat.com> - 1.2.14-3
+- Support point-to-point IPSec tunnel (RHEL-20952)
+- Fix crash in libreswan_nmstate_iface_dpd_rsa (RHEL-20952)
+- Support configuring IPSec mode with 'type' (RHEL-20952)
+
+* Mon Dec 18 2023 Fernando Fernandez Mancera <ferferna@redhat.com> - 1.2.14-2
+- Add DPD, ipsec-interface and authby support. RHEL-19225
+
 * Mon Aug 09 2021 Mohan Boddu <mboddu@redhat.com> - 1.2.14-1.3
 - Rebuilt for IMA sigs, glibc 2.34, aarch64 flags
   Related: rhbz#1991688

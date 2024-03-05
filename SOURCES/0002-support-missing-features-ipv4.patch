@@ -1,0 +1,448 @@
+From 946e336d6075bb0448b0a8cb110acc29d0633353 Mon Sep 17 00:00:00 2001
+From: Beniamino Galvani <bgalvani@redhat.com>
+Date: Tue, 9 Jan 2024 23:30:42 +0100
+Subject: [PATCH 1/5] service,properties: add support for leftmodecfgclient
+
+Previously the plugin always set leftmodecfgclient=yes, which is used
+for roaming clients to obtain a dynamic IP. In a server-to-server
+scenario we don't want that option; allow omitting it by passing
+leftmodecfgclient=no. It's somehow confusing that the new option has
+the opposite default value than Libreswan, but that's the only way to
+keep backwards compatibility for existing configurations.
+---
+ properties/nm-libreswan-editor-plugin.c | 2 ++
+ shared/nm-service-defines.h             | 1 +
+ shared/utils.c                          | 8 +++++++-
+ src/nm-libreswan-service.c              | 1 +
+ 4 files changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/properties/nm-libreswan-editor-plugin.c b/properties/nm-libreswan-editor-plugin.c
+index 5222b6a..a482cd3 100644
+--- a/properties/nm-libreswan-editor-plugin.c
++++ b/properties/nm-libreswan-editor-plugin.c
+@@ -186,6 +186,8 @@ import_from_file (NMVpnEditorPlugin *self,
+ 			nm_setting_vpn_add_data_item (s_vpn, NM_LIBRESWAN_KEY_LEFTUSERNAME, &str[13]);
+ 		else if (g_str_has_prefix (str, "leftcert="))
+ 			nm_setting_vpn_add_data_item (s_vpn, NM_LIBRESWAN_KEY_LEFTCERT, &str[9]);
++		else if (nm_streq0 (str, "leftmodecfgclient=no"))
++			nm_setting_vpn_add_data_item (s_vpn, NM_LIBRESWAN_KEY_LEFTMODECFGCLIENT, "no");
+ 		else if (g_str_has_prefix (str, "pfs=no"))
+ 			nm_setting_vpn_add_data_item (s_vpn, NM_LIBRESWAN_KEY_PFS, "no");
+ 		else if (g_str_has_prefix (str, "cisco-unity=yes"))
+diff --git a/shared/nm-service-defines.h b/shared/nm-service-defines.h
+index 3fdf2ef..14170ad 100644
+--- a/shared/nm-service-defines.h
++++ b/shared/nm-service-defines.h
+@@ -41,6 +41,7 @@
+ #define NM_LIBRESWAN_KEY_LEFTID                     "leftid"
+ #define NM_LIBRESWAN_KEY_LEFTRSASIGKEY              "leftrsasigkey"
+ #define NM_LIBRESWAN_KEY_LEFTCERT                   "leftcert"
++#define NM_LIBRESWAN_KEY_LEFTMODECFGCLIENT          "leftmodecfgclient"
+ #define NM_LIBRESWAN_KEY_AUTHBY                     "authby"
+ #define NM_LIBRESWAN_KEY_PSK_VALUE                  "pskvalue"
+ #define NM_LIBRESWAN_KEY_PSK_INPUT_MODES            "pskinputmodes"
+diff --git a/shared/utils.c b/shared/utils.c
+index c49727c..c3147c6 100644
+--- a/shared/utils.c
++++ b/shared/utils.c
+@@ -191,7 +191,13 @@ nm_libreswan_config_write (gint fd,
+ 	else
+ 		WRITE_CHECK (fd, debug_write_fcn, error, " left=%%defaultroute");
+ 
+-	WRITE_CHECK (fd, debug_write_fcn, error, " leftmodecfgclient=yes");
++	item = nm_setting_vpn_get_data_item (s_vpn, NM_LIBRESWAN_KEY_LEFTMODECFGCLIENT);
++	if (nm_streq0 (item, "no")) {
++		WRITE_CHECK (fd, debug_write_fcn, error, " leftmodecfgclient=no");
++	} else {
++		WRITE_CHECK (fd, debug_write_fcn, error, " leftmodecfgclient=yes");
++	}
++
+ 	if (leftupdown_script)
+ 		WRITE_CHECK (fd, debug_write_fcn, error, " leftupdown=%s", leftupdown_script);
+ 
+diff --git a/src/nm-libreswan-service.c b/src/nm-libreswan-service.c
+index ae04fa4..78ce40d 100644
+--- a/src/nm-libreswan-service.c
++++ b/src/nm-libreswan-service.c
+@@ -256,6 +256,7 @@ static ValidProperty valid_properties[] = {
+ 	{ NM_LIBRESWAN_KEY_LEFTUSERNAME,               G_TYPE_STRING, 0, 0 },
+ 	{ NM_LIBRESWAN_KEY_LEFTRSASIGKEY,              G_TYPE_STRING, 0, 0 },
+ 	{ NM_LIBRESWAN_KEY_LEFTCERT,                   G_TYPE_STRING, 0, 0 },
++	{ NM_LIBRESWAN_KEY_LEFTMODECFGCLIENT,          G_TYPE_STRING, 0, 0 },
+ 	{ NM_LIBRESWAN_KEY_AUTHBY,                     G_TYPE_STRING, 0, 0 },
+ 	{ NM_LIBRESWAN_KEY_DOMAIN,                     G_TYPE_STRING, 0, 0 },
+ 	{ NM_LIBRESWAN_KEY_DHGROUP,                    G_TYPE_STRING, 0, 0 },
+-- 
+2.43.0
+
+
+From 13ee17d179fdd63005cb28d5548facf7fb1b21ea Mon Sep 17 00:00:00 2001
+From: Beniamino Galvani <bgalvani@redhat.com>
+Date: Wed, 10 Jan 2024 09:29:50 +0100
+Subject: [PATCH 2/5] service: use new API to send configuration to NM
+
+Instead of emitting the "Ip4Config" signal that contains both generic
+and IPv4 configurations, use the more recent API and send two signals:
+"Config" for the generic configuration and "Ip4Config" for IPv4
+configuration.
+
+In this way, it will be possible in the next commit to return no IPv4
+configuration at all.
+---
+ src/nm-libreswan-service.c | 61 +++++++++++++++++++++++++-------------
+ 1 file changed, 40 insertions(+), 21 deletions(-)
+
+diff --git a/src/nm-libreswan-service.c b/src/nm-libreswan-service.c
+index 78ce40d..496fd08 100644
+--- a/src/nm-libreswan-service.c
++++ b/src/nm-libreswan-service.c
+@@ -1270,16 +1270,14 @@ handle_callback (NMDBusLibreswanHelper *object,
+ 		goto out;
+ 	}
+ 
++	/* First build and send the generic config */
+ 	g_variant_builder_init (&config, G_VARIANT_TYPE_VARDICT);
+ 
+-	/* Right peer (or Gateway) */
+-	val = addr4_to_gvariant (lookup_string (env, "PLUTO_PEER"));
+-	if (val)
+-		g_variant_builder_add (&config, "{sv}", NM_VPN_PLUGIN_IP4_CONFIG_GATEWAY, val);
+-	else {
+-		_LOGW ("IPsec/Pluto Right Peer (VPN Gateway)");
+-		goto out;
+-	}
++	/*
++	 * Enabled address families
++	 */
++	g_variant_builder_add (&config, "{sv}", NM_VPN_PLUGIN_CONFIG_HAS_IP4, g_variant_new_boolean (TRUE));
++	g_variant_builder_add (&config, "{sv}", NM_VPN_PLUGIN_CONFIG_HAS_IP6, g_variant_new_boolean (FALSE));
+ 
+ 	/*
+ 	 * Tunnel device
+@@ -1290,15 +1288,43 @@ handle_callback (NMDBusLibreswanHelper *object,
+ 	} else {
+ 		val = g_variant_new_string (NM_VPN_PLUGIN_IP4_CONFIG_TUNDEV_NONE);
+ 	}
++	g_variant_builder_add (&config, "{sv}", NM_VPN_PLUGIN_CONFIG_TUNDEV, val);
++
++	/* Banner */
++	val = str_to_gvariant (lookup_string (env, "PLUTO_PEER_BANNER"), TRUE);
++	if (val)
++		g_variant_builder_add (&config, "{sv}", NM_VPN_PLUGIN_CONFIG_BANNER, val);
++
++	/* Right peer (or Gateway) */
++	val = addr4_to_gvariant (lookup_string (env, "PLUTO_PEER"));
++	if (val)
++		g_variant_builder_add (&config, "{sv}", NM_VPN_PLUGIN_CONFIG_EXT_GATEWAY, val);
++	else {
++		_LOGW ("IPsec/Pluto Right Peer (VPN Gateway) is missing");
++		goto out;
++	}
++
++	nm_vpn_service_plugin_set_config (NM_VPN_SERVICE_PLUGIN (user_data),
++	                                  g_variant_builder_end (&config));
+ 
+-	g_variant_builder_add (&config, "{sv}", NM_VPN_PLUGIN_IP4_CONFIG_TUNDEV, val);
++	/* Then build and send the IPv4 config */
++	g_variant_builder_init (&config, G_VARIANT_TYPE_VARDICT);
++
++	/* Right peer (or Gateway) */
++	val = addr4_to_gvariant (lookup_string (env, "PLUTO_PEER"));
++	if (val)
++		g_variant_builder_add (&config, "{sv}", NM_VPN_PLUGIN_IP4_CONFIG_GATEWAY, val);
++	else {
++		_LOGW ("IPsec/Pluto Right Peer (VPN Gateway) is missing");
++		goto out;
++	}
+ 
+ 	/* IP address */
+ 	val = addr4_to_gvariant (lookup_string (env, "PLUTO_MY_SOURCEIP"));
+ 	if (val)
+ 		g_variant_builder_add (&config, "{sv}", NM_VPN_PLUGIN_IP4_CONFIG_ADDRESS, val);
+ 	else {
+-		_LOGW ("IP4 Address");
++		_LOGW ("IP4 Address is missing");
+ 		goto out;
+ 	}
+ 
+@@ -1307,7 +1333,7 @@ handle_callback (NMDBusLibreswanHelper *object,
+ 	if (val)
+ 		g_variant_builder_add (&config, "{sv}", NM_VPN_PLUGIN_IP4_CONFIG_PTP, val);
+ 	else {
+-		_LOGW ("IP4 PTP Address");
++		_LOGW ("IP4 PTP Address is missing");
+ 		goto out;
+ 	}
+ 
+@@ -1324,7 +1350,6 @@ handle_callback (NMDBusLibreswanHelper *object,
+ 	if (val)
+ 		g_variant_builder_add (&config, "{sv}", NM_VPN_PLUGIN_IP4_CONFIG_DNS, val);
+ 
+-
+ 	/* Default domain */
+ 	val = str_to_gvariant (lookup_string (env, "PLUTO_CISCO_DOMAIN_INFO"), TRUE);
+ 	if (!val) {
+@@ -1334,11 +1359,6 @@ handle_callback (NMDBusLibreswanHelper *object,
+ 	if (val)
+ 		g_variant_builder_add (&config, "{sv}", NM_VPN_PLUGIN_IP4_CONFIG_DOMAIN, val);
+ 
+-	/* Banner */
+-	val = str_to_gvariant (lookup_string (env, "PLUTO_PEER_BANNER"), TRUE);
+-	if (val)
+-		g_variant_builder_add (&config, "{sv}", NM_VPN_PLUGIN_IP4_CONFIG_BANNER, val);
+-
+ 	/* Indicates whether the VPN is using a XFRM interface (via option ipsec-interface=) */
+ 	is_xfrmi = nm_streq0 (lookup_string (env, "PLUTO_XFRMI_ROUTE"), "yes");
+ 
+@@ -1369,12 +1389,11 @@ handle_callback (NMDBusLibreswanHelper *object,
+ 		g_variant_builder_add (&config, "{sv}", NM_VPN_PLUGIN_IP4_CONFIG_NEVER_DEFAULT, g_variant_new_boolean (TRUE));
+ 
+ 	success = TRUE;
++	nm_vpn_service_plugin_set_ip4_config (NM_VPN_SERVICE_PLUGIN (user_data),
++	                                      g_variant_builder_end (&config));
+ 
+ out:
+-	if (success) {
+-		nm_vpn_service_plugin_set_ip4_config (NM_VPN_SERVICE_PLUGIN (user_data),
+-		                                      g_variant_builder_end (&config));
+-	} else {
++	if (!success) {
+ 		connect_failed (NM_LIBRESWAN_PLUGIN (user_data), NULL,
+ 		                NM_VPN_PLUGIN_FAILURE_CONNECT_FAILED);
+ 	}
+-- 
+2.43.0
+
+
+From 407c7b4a765a1a9da179f66aa8b9952958b7ecd2 Mon Sep 17 00:00:00 2001
+From: Beniamino Galvani <bgalvani@redhat.com>
+Date: Wed, 10 Jan 2024 09:31:48 +0100
+Subject: [PATCH 3/5] service: don't send IPv4 config if mode config client is
+ disabled
+
+If the mode config client is disabled (i.e. in server-to-server
+scenario) we are not going to receive a dynamic IP. The IP address
+already configured on the existing interface is enough.
+---
+ src/nm-libreswan-service.c | 20 +++++++++++++++++++-
+ 1 file changed, 19 insertions(+), 1 deletion(-)
+
+diff --git a/src/nm-libreswan-service.c b/src/nm-libreswan-service.c
+index 496fd08..c3db36b 100644
+--- a/src/nm-libreswan-service.c
++++ b/src/nm-libreswan-service.c
+@@ -1253,6 +1253,7 @@ handle_callback (NMDBusLibreswanHelper *object,
+                  gpointer user_data)
+ {
+ 	NMLibreswanPluginPrivate *priv = NM_LIBRESWAN_PLUGIN_GET_PRIVATE (user_data);
++	NMSettingVpn *s_vpn;
+ 	GVariantBuilder config;
+ 	GVariantBuilder builder;
+ 	GVariant *val;
+@@ -1260,7 +1261,9 @@ handle_callback (NMDBusLibreswanHelper *object,
+ 	guint i;
+ 	const char *verb;
+ 	const char *virt_if;
++	const char *str;
+ 	gboolean is_xfrmi = FALSE;
++	gboolean has_ip4;
+ 
+ 	_LOGI ("Configuration from the helper received.");
+ 
+@@ -1273,10 +1276,21 @@ handle_callback (NMDBusLibreswanHelper *object,
+ 	/* First build and send the generic config */
+ 	g_variant_builder_init (&config, G_VARIANT_TYPE_VARDICT);
+ 
++	if (   priv->connection
++	    && (s_vpn = nm_connection_get_setting_vpn (priv->connection))
++	    && (str = nm_setting_vpn_get_data_item (s_vpn, NM_LIBRESWAN_KEY_LEFTMODECFGCLIENT))
++	    && nm_streq (str, "no")) {
++		has_ip4 = FALSE;
++	} else {
++		has_ip4 = TRUE;
++	}
++
++	_LOGD ("Configuration has IPv4: %d", has_ip4);
++
+ 	/*
+ 	 * Enabled address families
+ 	 */
+-	g_variant_builder_add (&config, "{sv}", NM_VPN_PLUGIN_CONFIG_HAS_IP4, g_variant_new_boolean (TRUE));
++	g_variant_builder_add (&config, "{sv}", NM_VPN_PLUGIN_CONFIG_HAS_IP4, g_variant_new_boolean (has_ip4));
+ 	g_variant_builder_add (&config, "{sv}", NM_VPN_PLUGIN_CONFIG_HAS_IP6, g_variant_new_boolean (FALSE));
+ 
+ 	/*
+@@ -1306,6 +1320,10 @@ handle_callback (NMDBusLibreswanHelper *object,
+ 
+ 	nm_vpn_service_plugin_set_config (NM_VPN_SERVICE_PLUGIN (user_data),
+ 	                                  g_variant_builder_end (&config));
++	if (!has_ip4) {
++		success = TRUE;
++		goto out;
++	}
+ 
+ 	/* Then build and send the IPv4 config */
+ 	g_variant_builder_init (&config, G_VARIANT_TYPE_VARDICT);
+-- 
+2.43.0
+
+
+From 39cee967cbfff6a916a75627aad780596369ff44 Mon Sep 17 00:00:00 2001
+From: Beniamino Galvani <bgalvani@redhat.com>
+Date: Sat, 13 Jan 2024 18:10:02 +0100
+Subject: [PATCH 4/5] service: fix wrong refcounting in D-Bus handler for
+ Callback()
+
+The Callback() D-Bus method is handled via a GDBus-generated skeleton
+code in nm-libreswan-helper-service-dbus.c, function
+_nmdbus_libreswan_helper_skeleton_handle_method_call(). The function
+emits signal "handle-callback" to let the program handle the incoming
+method. As documented in the GDoc comments, the signal handler must
+return TRUE if it handles the call.
+
+```
+  /**
+   * NMDBusLibreswanHelper::handle-callback:
+   * @object: A #NMDBusLibreswanHelper.
+   * @invocation: A #GDBusMethodInvocation.
+   * @arg_environment: Argument passed by remote caller.
+
+   * Signal emitted when a remote caller is invoking the Callback()
+     D-Bus method.
+
+   * If a signal handler returns %TRUE, it means the signal handler
+     will handle the invocation (e.g. take a reference to @invocation
+     and eventually call nmdbus_libreswan_helper_complete_callback()
+     or e.g. g_dbus_method_invocation_return_error() on it) and no
+     other signal handlers will run. If no signal handler handles the
+     invocation, the %G_DBUS_ERROR_UNKNOWN_METHOD error is returned.
+
+   * Returns: %G_DBUS_METHOD_INVOCATION_HANDLED or %TRUE if the
+     invocation was handled, %G_DBUS_METHOD_INVOCATION_UNHANDLED or
+     %FALSE to let other signal handlers run.
+   */
+```
+
+At the moment, in case of error the handler first calls
+nmdbus_libreswan_helper_complete_callback() which decreases the
+refcount of "invocation", and then returns FALSE which tells the
+skeleton code to return an error, also unreferencing the
+invocation. This causes a crash.
+
+Since the G_DBUS_METHOD_INVOCATION_HANDLED alias for TRUE is only
+available since GLib 2.68 (while we target 2.36), just return TRUE.
+
+Fixes: acb9eb9de50b ('service: process the configuration in the service, not the helper')
+---
+ src/nm-libreswan-service.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/nm-libreswan-service.c b/src/nm-libreswan-service.c
+index c3db36b..f6b8549 100644
+--- a/src/nm-libreswan-service.c
++++ b/src/nm-libreswan-service.c
+@@ -1417,7 +1417,8 @@ out:
+ 	}
+ 
+ 	nmdbus_libreswan_helper_complete_callback (object, invocation);
+-	return success;
++
++	return TRUE;
+ }
+ 
+ /****************************************************************/
+-- 
+2.43.0
+
+
+From 225d7aa27cdaf6448f6fe0ccd264fc57a0b41b32 Mon Sep 17 00:00:00 2001
+From: Beniamino Galvani <bgalvani@redhat.com>
+Date: Mon, 15 Jan 2024 13:23:45 +0100
+Subject: [PATCH 5/5] service,properties: support type, hostaddrfamily,
+ clientaddrfamily
+
+Add support for:
+ - type
+ - hostaddrfamily
+ - clientaddrfamily
+
+Since those are very advanced options, don't implement the GUI part
+for now.
+---
+ properties/nm-libreswan-editor-plugin.c |  6 ++++++
+ shared/nm-service-defines.h             |  3 +++
+ shared/utils.c                          | 12 ++++++++++++
+ src/nm-libreswan-service.c              |  3 +++
+ 4 files changed, 24 insertions(+)
+
+diff --git a/properties/nm-libreswan-editor-plugin.c b/properties/nm-libreswan-editor-plugin.c
+index a482cd3..6a4c1a4 100644
+--- a/properties/nm-libreswan-editor-plugin.c
++++ b/properties/nm-libreswan-editor-plugin.c
+@@ -210,6 +210,12 @@ import_from_file (NMVpnEditorPlugin *self,
+ 			nm_setting_vpn_add_data_item (s_vpn, NM_LIBRESWAN_KEY_IPSEC_INTERFACE, &str[16]);
+ 		else if (g_str_has_prefix (str, "authby="))
+ 			nm_setting_vpn_add_data_item (s_vpn, NM_LIBRESWAN_KEY_AUTHBY, &str[7]);
++		else if (g_str_has_prefix (str, "type="))
++			nm_setting_vpn_add_data_item (s_vpn, NM_LIBRESWAN_KEY_TYPE, str + NM_STRLEN("type="));
++		else if (g_str_has_prefix (str, "hostaddrfamily="))
++			nm_setting_vpn_add_data_item (s_vpn, NM_LIBRESWAN_KEY_HOSTADDRFAMILY, str + NM_STRLEN("hostaddrfamily="));
++		else if (g_str_has_prefix (str, "clientaddrfamily="))
++			nm_setting_vpn_add_data_item (s_vpn, NM_LIBRESWAN_KEY_CLIENTADDRFAMILY, str + NM_STRLEN("clientaddrfamily="));
+ 		else if (g_str_has_prefix (str, "rightsubnet=")) {
+ 			if (!g_str_has_prefix (str, "rightsubnet=0.0.0.0/0"))
+ 				nm_setting_vpn_add_data_item (s_vpn, NM_LIBRESWAN_KEY_REMOTENETWORK, &str[12]);
+diff --git a/shared/nm-service-defines.h b/shared/nm-service-defines.h
+index 14170ad..95e19d4 100644
+--- a/shared/nm-service-defines.h
++++ b/shared/nm-service-defines.h
+@@ -68,6 +68,9 @@
+ #define NM_LIBRESWAN_KEY_FRAGMENTATION              "fragmentation"
+ #define NM_LIBRESWAN_KEY_MOBIKE                     "mobike"
+ #define NM_LIBRESWAN_KEY_IPSEC_INTERFACE            "ipsec-interface"
++#define NM_LIBRESWAN_KEY_TYPE                       "type"
++#define NM_LIBRESWAN_KEY_HOSTADDRFAMILY             "hostaddrfamily"
++#define NM_LIBRESWAN_KEY_CLIENTADDRFAMILY           "clientaddrfamily"
+ 
+ #define NM_LIBRESWAN_IKEV2_NO      "no"
+ #define NM_LIBRESWAN_IKEV2_NEVER   "never"
+diff --git a/shared/utils.c b/shared/utils.c
+index c3147c6..e6f8b5b 100644
+--- a/shared/utils.c
++++ b/shared/utils.c
+@@ -325,6 +325,18 @@ nm_libreswan_config_write (gint fd,
+ 	if (item && strlen (item))
+ 		WRITE_CHECK (fd, debug_write_fcn, error, " ipsec-interface=%s", item);
+ 
++	item = nm_setting_vpn_get_data_item (s_vpn, NM_LIBRESWAN_KEY_TYPE);
++	if (item && strlen (item))
++		WRITE_CHECK (fd, debug_write_fcn, error, " type=%s", item);
++
++	item = nm_setting_vpn_get_data_item (s_vpn, NM_LIBRESWAN_KEY_HOSTADDRFAMILY);
++	if (item && strlen (item))
++		WRITE_CHECK (fd, debug_write_fcn, error, " hostaddrfamily=%s", item);
++
++	item = nm_setting_vpn_get_data_item (s_vpn, NM_LIBRESWAN_KEY_CLIENTADDRFAMILY);
++	if (item && strlen (item))
++		WRITE_CHECK (fd, debug_write_fcn, error, " clientaddrfamily=%s", item);
++
+ 	WRITE_CHECK (fd, debug_write_fcn, error, " nm-configured=yes");
+ 
+ 	WRITE_CHECK_NEWLINE (fd, trailing_newline, debug_write_fcn, error, " auto=add");
+diff --git a/src/nm-libreswan-service.c b/src/nm-libreswan-service.c
+index f6b8549..18b19d7 100644
+--- a/src/nm-libreswan-service.c
++++ b/src/nm-libreswan-service.c
+@@ -277,6 +277,9 @@ static ValidProperty valid_properties[] = {
+ 	{ NM_LIBRESWAN_KEY_FRAGMENTATION,              G_TYPE_STRING, 0, 0 },
+ 	{ NM_LIBRESWAN_KEY_MOBIKE,                     G_TYPE_STRING, 0, 0 },
+ 	{ NM_LIBRESWAN_KEY_IPSEC_INTERFACE,            G_TYPE_STRING, 0, 0 },
++	{ NM_LIBRESWAN_KEY_TYPE,                       G_TYPE_STRING, 0, 0 },
++	{ NM_LIBRESWAN_KEY_HOSTADDRFAMILY,             G_TYPE_STRING, 0, 0 },
++	{ NM_LIBRESWAN_KEY_CLIENTADDRFAMILY,           G_TYPE_STRING, 0, 0 },
+ 	/* Ignored option for internal use */
+ 	{ NM_LIBRESWAN_KEY_PSK_INPUT_MODES,            G_TYPE_NONE, 0, 0 },
+ 	{ NM_LIBRESWAN_KEY_XAUTH_PASSWORD_INPUT_MODES, G_TYPE_NONE, 0, 0 },
+-- 
+2.43.0
+

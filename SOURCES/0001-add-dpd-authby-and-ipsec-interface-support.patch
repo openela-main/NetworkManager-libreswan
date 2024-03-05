@@ -1,0 +1,433 @@
+From 357fc7227f6e219e4e55fd29e347ce1f21369518 Mon Sep 17 00:00:00 2001
+From: Beniamino Galvani <bgalvani@redhat.com>
+Date: Thu, 23 Nov 2023 14:13:59 +0100
+Subject: [PATCH 1/4] service,properties: support DPD parameters
+
+Add support for parameters related to Dead Peer Detection (DPD), a
+mechanism to check for reachability of IKE peers.
+
+(cherry picked from commit 6c35e460d393e73c478c7e885e875ea8c4918133)
+---
+ man/nm-settings-libreswan.5.in          | 21 ++++++++++++++++++++-
+ properties/nm-libreswan-editor-plugin.c |  6 ++++++
+ shared/nm-service-defines.h             |  2 ++
+ shared/utils.c                          | 13 +++++++++++++
+ src/nm-libreswan-service.c              |  4 +++-
+ 5 files changed, 44 insertions(+), 2 deletions(-)
+
+diff --git a/man/nm-settings-libreswan.5.in b/man/nm-settings-libreswan.5.in
+index 0188432..1bb304e 100644
+--- a/man/nm-settings-libreswan.5.in
++++ b/man/nm-settings-libreswan.5.in
+@@ -85,7 +85,26 @@ ignored.
+ ignored.
+ .TP
+ .I "dpdtimeout"
+-ignored.
++the length of time that we will idle without hearing back from our peer. After
++this period has elapsed with no response and no traffic, we will declare the
++peer dead, and remove the SA. Set value bigger than dpddelay to enable. If
++dpdtimeout is set, dpddelay also needs to be set. Must be a number optionally
++followed by a time unit: 's' (seconds), 'm' (minutes), 'h', (hours) or 'd'
++(days); if the unit is not specified, it defaults to seconds. Corresponds to the
++Libreswan parameter of the same name.
++.TP
++.I "dpddelay"
++the delay between Dead Peer Detection (IKEv1 RFC 3706) or IKEv2 Liveness
++keepalives that are sent for this connection. Must be a number optionally
++followed by a time unit: 's' (seconds), 'm' (minutes), 'h', (hours) or 'd'
++(days); if the unit is not specified, it defaults to seconds. Corresponds to the
++Libreswan parameter of the same name.
++.TP
++.I "dpdaction"
++When a DPD enabled peer is declared dead, what action should be taken.  "hold"
++(default) means the eroute will be put into %hold status, while "clear" means
++the eroute and SA with both be cleared. "restart" means that ALL SAs to the dead
++peer will renegotiated. Corresponds to the Libreswan parameter of the same name.
+ .TP
+ .I "ike"
+ allowed ciphers to be negotiatied to establish the IKE SAs. Corresponds to the
+diff --git a/properties/nm-libreswan-editor-plugin.c b/properties/nm-libreswan-editor-plugin.c
+index 9a2399a..c4247f2 100644
+--- a/properties/nm-libreswan-editor-plugin.c
++++ b/properties/nm-libreswan-editor-plugin.c
+@@ -198,6 +198,12 @@ import_from_file (NMVpnEditorPlugin *self,
+ 			nm_setting_vpn_add_data_item (s_vpn, NM_LIBRESWAN_KEY_FRAGMENTATION, &str[14]);
+ 		else if (g_str_has_prefix (str, "mobike="))
+ 			nm_setting_vpn_add_data_item (s_vpn, NM_LIBRESWAN_KEY_MOBIKE, &str[7]);
++		else if (g_str_has_prefix (str, "dpddelay="))
++			nm_setting_vpn_add_data_item (s_vpn, NM_LIBRESWAN_KEY_DPDDELAY, &str[9]);
++		else if (g_str_has_prefix (str, "dpdtimeout="))
++			nm_setting_vpn_add_data_item (s_vpn, NM_LIBRESWAN_KEY_DPDTIMEOUT, &str[11]);
++		else if (g_str_has_prefix (str, "dpdaction="))
++			nm_setting_vpn_add_data_item (s_vpn, NM_LIBRESWAN_KEY_DPDACTION, &str[10]);
+ 		else if (g_str_has_prefix (str, "rightsubnet=")) {
+ 			if (!g_str_has_prefix (str, "rightsubnet=0.0.0.0/0"))
+ 				nm_setting_vpn_add_data_item (s_vpn, NM_LIBRESWAN_KEY_REMOTENETWORK, &str[12]);
+diff --git a/shared/nm-service-defines.h b/shared/nm-service-defines.h
+index a01a00f..c613fb7 100644
+--- a/shared/nm-service-defines.h
++++ b/shared/nm-service-defines.h
+@@ -52,6 +52,8 @@
+ #define NM_LIBRESWAN_KEY_PFS                        "pfs"
+ #define NM_LIBRESWAN_KEY_PFSGROUP                   "pfsgroup"
+ #define NM_LIBRESWAN_KEY_DPDTIMEOUT                 "dpdtimeout"
++#define NM_LIBRESWAN_KEY_DPDDELAY                   "dpddelay"
++#define NM_LIBRESWAN_KEY_DPDACTION                  "dpdaction"
+ #define NM_LIBRESWAN_KEY_IKE                        "ike"
+ #define NM_LIBRESWAN_KEY_ESP                        "esp"
+ #define NM_LIBRESWAN_KEY_IKELIFETIME                "ikelifetime"
+diff --git a/shared/utils.c b/shared/utils.c
+index acb237f..5f71624 100644
+--- a/shared/utils.c
++++ b/shared/utils.c
+@@ -118,6 +118,7 @@ nm_libreswan_config_write (gint fd,
+ 	const char *fragmentation;
+ 	const char *mobike;
+ 	const char *pfs;
++	const char *item;
+ 	gboolean is_ikev2 = FALSE;
+ 
+ 	g_return_val_if_fail (fd > 0, FALSE);
+@@ -297,6 +298,18 @@ nm_libreswan_config_write (gint fd,
+ 	if (mobike && strlen (mobike))
+ 		WRITE_CHECK (fd, debug_write_fcn, error, " mobike=%s", mobike);
+ 
++	item = nm_setting_vpn_get_data_item (s_vpn, NM_LIBRESWAN_KEY_DPDDELAY);
++	if (item && strlen (item))
++		WRITE_CHECK (fd, debug_write_fcn, error, " dpddelay=%s", item);
++
++	item = nm_setting_vpn_get_data_item (s_vpn, NM_LIBRESWAN_KEY_DPDTIMEOUT);
++	if (item && strlen (item))
++		WRITE_CHECK (fd, debug_write_fcn, error, " dpdtimeout=%s", item);
++
++	item = nm_setting_vpn_get_data_item (s_vpn, NM_LIBRESWAN_KEY_DPDACTION);
++	if (item && strlen (item))
++		WRITE_CHECK (fd, debug_write_fcn, error, " dpdaction=%s", item);
++
+ 	WRITE_CHECK (fd, debug_write_fcn, error, " nm-configured=yes");
+ 
+ 	WRITE_CHECK_NEWLINE (fd, trailing_newline, debug_write_fcn, error, " auto=add");
+diff --git a/src/nm-libreswan-service.c b/src/nm-libreswan-service.c
+index 3541125..bee47f3 100644
+--- a/src/nm-libreswan-service.c
++++ b/src/nm-libreswan-service.c
+@@ -260,7 +260,9 @@ static ValidProperty valid_properties[] = {
+ 	{ NM_LIBRESWAN_KEY_DHGROUP,                    G_TYPE_STRING, 0, 0 },
+ 	{ NM_LIBRESWAN_KEY_PFS,                        G_TYPE_STRING, 0, 0 },
+ 	{ NM_LIBRESWAN_KEY_PFSGROUP,                   G_TYPE_STRING, 0, 0 },
+-	{ NM_LIBRESWAN_KEY_DPDTIMEOUT,                 G_TYPE_INT, 0, 86400 },
++	{ NM_LIBRESWAN_KEY_DPDACTION,                  G_TYPE_STRING, 0, 0 },
++	{ NM_LIBRESWAN_KEY_DPDDELAY,                   G_TYPE_STRING, 0, 0 },
++	{ NM_LIBRESWAN_KEY_DPDTIMEOUT,                 G_TYPE_STRING, 0, 0 },
+ 	{ NM_LIBRESWAN_KEY_IKE,                        G_TYPE_STRING, 0, 0 },
+ 	{ NM_LIBRESWAN_KEY_ESP,                        G_TYPE_STRING, 0, 0 },
+ 	{ NM_LIBRESWAN_KEY_IKELIFETIME,                G_TYPE_STRING, 0, 0 },
+-- 
+2.43.0
+
+
+From 8f6bdd745d2d9fa61f6d82929984bbf7411e4632 Mon Sep 17 00:00:00 2001
+From: Beniamino Galvani <bgalvani@redhat.com>
+Date: Fri, 24 Nov 2023 16:27:18 +0100
+Subject: [PATCH 2/4] service,properties: support the "ipsec-interface" option
+
+Introduce a new option "ipsec-interface" to create a XFRM virtual
+interface for "Routing based VPNs" (as opposed to "Policy based
+VPNs").
+
+(cherry picked from commit f5e8bf1ebe17d13c49780647973dd742f40f112c)
+---
+ man/nm-settings-libreswan.5.in          |  7 +++++++
+ properties/nm-libreswan-editor-plugin.c |  2 ++
+ shared/nm-service-defines.h             |  1 +
+ shared/utils.c                          |  4 ++++
+ src/nm-libreswan-service.c              | 11 +++++++++--
+ 5 files changed, 23 insertions(+), 2 deletions(-)
+
+diff --git a/man/nm-settings-libreswan.5.in b/man/nm-settings-libreswan.5.in
+index 1bb304e..59ac4ee 100644
+--- a/man/nm-settings-libreswan.5.in
++++ b/man/nm-settings-libreswan.5.in
+@@ -153,6 +153,13 @@ Matches the Libreswan parameter of the same name.
+ Allowed values are: 'yes' and 'no'.
+ Matches the Libreswan parameter of the same name.
+ .TP
++.I "ipsec-interface"
++If set, create or use an existing virtual interface ipsecXXX for "Routing based
++VPNs" (as opposed to "Policy based VPNs"). Valid options are 'yes', 'no' or a
++number. When using a number, the IPsec interface created and/or used will use
++that number as part of the interface name. Corresponds to the Libreswan
++parameter of the same name.
++.TP
+ .I "pskinputmodes"
+ where the 'pskvalue' can be retrieved. Used internally by the plugin. Allowed values are: 'unused', 'save', 'ask'.
+ .TP
+diff --git a/properties/nm-libreswan-editor-plugin.c b/properties/nm-libreswan-editor-plugin.c
+index c4247f2..0b3e36d 100644
+--- a/properties/nm-libreswan-editor-plugin.c
++++ b/properties/nm-libreswan-editor-plugin.c
+@@ -204,6 +204,8 @@ import_from_file (NMVpnEditorPlugin *self,
+ 			nm_setting_vpn_add_data_item (s_vpn, NM_LIBRESWAN_KEY_DPDTIMEOUT, &str[11]);
+ 		else if (g_str_has_prefix (str, "dpdaction="))
+ 			nm_setting_vpn_add_data_item (s_vpn, NM_LIBRESWAN_KEY_DPDACTION, &str[10]);
++		else if (g_str_has_prefix (str, "ipsec-interface="))
++			nm_setting_vpn_add_data_item (s_vpn, NM_LIBRESWAN_KEY_IPSEC_INTERFACE, &str[16]);
+ 		else if (g_str_has_prefix (str, "rightsubnet=")) {
+ 			if (!g_str_has_prefix (str, "rightsubnet=0.0.0.0/0"))
+ 				nm_setting_vpn_add_data_item (s_vpn, NM_LIBRESWAN_KEY_REMOTENETWORK, &str[12]);
+diff --git a/shared/nm-service-defines.h b/shared/nm-service-defines.h
+index c613fb7..78193f2 100644
+--- a/shared/nm-service-defines.h
++++ b/shared/nm-service-defines.h
+@@ -65,6 +65,7 @@
+ #define NM_LIBRESWAN_KEY_REKEY                      "rekey"
+ #define NM_LIBRESWAN_KEY_FRAGMENTATION              "fragmentation"
+ #define NM_LIBRESWAN_KEY_MOBIKE                     "mobike"
++#define NM_LIBRESWAN_KEY_IPSEC_INTERFACE            "ipsec-interface"
+ 
+ #define NM_LIBRESWAN_IKEV2_NO      "no"
+ #define NM_LIBRESWAN_IKEV2_NEVER   "never"
+diff --git a/shared/utils.c b/shared/utils.c
+index 5f71624..a1a1c77 100644
+--- a/shared/utils.c
++++ b/shared/utils.c
+@@ -310,6 +310,10 @@ nm_libreswan_config_write (gint fd,
+ 	if (item && strlen (item))
+ 		WRITE_CHECK (fd, debug_write_fcn, error, " dpdaction=%s", item);
+ 
++	item = nm_setting_vpn_get_data_item (s_vpn, NM_LIBRESWAN_KEY_IPSEC_INTERFACE);
++	if (item && strlen (item))
++		WRITE_CHECK (fd, debug_write_fcn, error, " ipsec-interface=%s", item);
++
+ 	WRITE_CHECK (fd, debug_write_fcn, error, " nm-configured=yes");
+ 
+ 	WRITE_CHECK_NEWLINE (fd, trailing_newline, debug_write_fcn, error, " auto=add");
+diff --git a/src/nm-libreswan-service.c b/src/nm-libreswan-service.c
+index bee47f3..0b6db91 100644
+--- a/src/nm-libreswan-service.c
++++ b/src/nm-libreswan-service.c
+@@ -274,6 +274,7 @@ static ValidProperty valid_properties[] = {
+ 	{ NM_LIBRESWAN_KEY_REKEY,                      G_TYPE_STRING, 0, 0 },
+ 	{ NM_LIBRESWAN_KEY_FRAGMENTATION,              G_TYPE_STRING, 0, 0 },
+ 	{ NM_LIBRESWAN_KEY_MOBIKE,                     G_TYPE_STRING, 0, 0 },
++	{ NM_LIBRESWAN_KEY_IPSEC_INTERFACE,            G_TYPE_STRING, 0, 0 },
+ 	/* Ignored option for internal use */
+ 	{ NM_LIBRESWAN_KEY_PSK_INPUT_MODES,            G_TYPE_NONE, 0, 0 },
+ 	{ NM_LIBRESWAN_KEY_XAUTH_PASSWORD_INPUT_MODES, G_TYPE_NONE, 0, 0 },
+@@ -1252,6 +1253,7 @@ handle_callback (NMDBusLibreswanHelper *object,
+ 	gboolean success = FALSE;
+ 	guint i;
+ 	const char *verb;
++	const char *virt_if;
+ 
+ 	_LOGI ("Configuration from the helper received.");
+ 
+@@ -1274,9 +1276,14 @@ handle_callback (NMDBusLibreswanHelper *object,
+ 
+ 	/*
+ 	 * Tunnel device
+-	 * Indicate that this plugin doesn't use tun/tap device
+ 	 */
+-	val = g_variant_new_string (NM_VPN_PLUGIN_IP4_CONFIG_TUNDEV_NONE);
++	virt_if = lookup_string (env, "PLUTO_VIRT_INTERFACE");
++	if (virt_if && !nm_streq (virt_if, "NULL")) {
++		val = g_variant_new_string (virt_if);
++	} else {
++		val = g_variant_new_string (NM_VPN_PLUGIN_IP4_CONFIG_TUNDEV_NONE);
++	}
++
+ 	g_variant_builder_add (&config, "{sv}", NM_VPN_PLUGIN_IP4_CONFIG_TUNDEV, val);
+ 
+ 	/* IP address */
+-- 
+2.43.0
+
+
+From 11061213f6f52373470af11d0b00c24b8670f356 Mon Sep 17 00:00:00 2001
+From: Beniamino Galvani <bgalvani@redhat.com>
+Date: Tue, 28 Nov 2023 11:59:05 +0100
+Subject: [PATCH 3/4] service: ignore next hop in routed mode
+
+In routed mode, the traffic needs to be sent directly over the
+interface without a gateway.
+
+(cherry picked from commit aa14380637a3de20ce9a59abc8b927368b1ab926)
+---
+ src/nm-libreswan-service.c | 24 ++++++++++++++++++------
+ 1 file changed, 18 insertions(+), 6 deletions(-)
+
+diff --git a/src/nm-libreswan-service.c b/src/nm-libreswan-service.c
+index 0b6db91..93beec0 100644
+--- a/src/nm-libreswan-service.c
++++ b/src/nm-libreswan-service.c
+@@ -1197,7 +1197,7 @@ _take_route (GPtrArray *routes, GVariant *new, gboolean alive)
+ }
+ 
+ static void
+-handle_route (GPtrArray *routes, GVariant *env, gboolean alive)
++handle_route (GPtrArray *routes, GVariant *env, gboolean alive, gboolean is_xfrmi)
+ {
+ 	GVariantBuilder builder;
+ 	const gchar *net, *mask, *next_hop, *my_sourceip;
+@@ -1210,9 +1210,13 @@ handle_route (GPtrArray *routes, GVariant *env, gboolean alive)
+ 	next_hop = lookup_string (env, "PLUTO_NEXT_HOP");
+ 	my_sourceip = lookup_string (env, "PLUTO_MY_SOURCEIP");
+ 
++
+ 	if (!net || !mask || !next_hop || !my_sourceip)
+ 		return;
+ 
++	if (is_xfrmi)
++		next_hop = "0.0.0.0";
++
+ 	if (g_strcmp0 (net, "0.0.0.0") == 0 && g_strcmp0 (mask, "0")) {
+ 		g_variant_builder_init (&builder, G_VARIANT_TYPE ("au"));
+ 		g_variant_builder_add_value (&builder, addr4_to_gvariant ("0.0.0.0"));
+@@ -1254,6 +1258,7 @@ handle_callback (NMDBusLibreswanHelper *object,
+ 	guint i;
+ 	const char *verb;
+ 	const char *virt_if;
++	gboolean is_xfrmi = FALSE;
+ 
+ 	_LOGI ("Configuration from the helper received.");
+ 
+@@ -1332,16 +1337,23 @@ handle_callback (NMDBusLibreswanHelper *object,
+ 	if (val)
+ 		g_variant_builder_add (&config, "{sv}", NM_VPN_PLUGIN_IP4_CONFIG_BANNER, val);
+ 
++	/* Indicates whether the VPN is using a XFRM interface (via option ipsec-interface=) */
++	is_xfrmi = nm_streq0 (lookup_string (env, "PLUTO_XFRMI_ROUTE"), "yes");
+ 
+-	val = addr4_to_gvariant (lookup_string (env, "PLUTO_NEXT_HOP"));
+-	if (val)
+-		g_variant_builder_add (&config, "{sv}", NM_VPN_PLUGIN_IP4_CONFIG_INT_GATEWAY, val);
++	if (is_xfrmi) {
++		/* The traffic needs to be sent directly over the interface without a gateway.
++		 * Ignore the next hop. */
++	} else {
++		val = addr4_to_gvariant (lookup_string (env, "PLUTO_NEXT_HOP"));
++		if (val)
++			g_variant_builder_add (&config, "{sv}", NM_VPN_PLUGIN_IP4_CONFIG_INT_GATEWAY, val);
++	}
+ 
+ 	/* This route */
+ 	if (g_strcmp0 (verb, "route-client") == 0 || g_strcmp0 (verb, "route-host"))
+-		handle_route (priv->routes, env, TRUE);
++		handle_route (priv->routes, env, TRUE, is_xfrmi);
+ 	else if (g_strcmp0 (verb, "unroute-client") == 0 || g_strcmp0 (verb, "unroute-host"))
+-		handle_route (priv->routes, env, FALSE);
++		handle_route (priv->routes, env, FALSE, is_xfrmi);
+ 
+ 	/* Routes */
+ 	g_variant_builder_init (&builder, G_VARIANT_TYPE ("aau"));
+-- 
+2.43.0
+
+
+From b5faeba110bd1145d7e0210267e36b054c419c54 Mon Sep 17 00:00:00 2001
+From: Beniamino Galvani <bgalvani@redhat.com>
+Date: Thu, 30 Nov 2023 16:45:15 +0100
+Subject: [PATCH 4/4] service,properties: support the "authby" option
+
+Add support for the "authby" option, used to specify the mutual
+authentication mechanism.
+
+(cherry picked from commit 320b9daa2369cf2f76504544dc071911e2802421)
+---
+ man/nm-settings-libreswan.5.in          | 4 ++++
+ properties/nm-libreswan-editor-plugin.c | 2 ++
+ shared/nm-service-defines.h             | 1 +
+ shared/utils.c                          | 9 +++++++--
+ src/nm-libreswan-service.c              | 1 +
+ 5 files changed, 15 insertions(+), 2 deletions(-)
+
+diff --git a/man/nm-settings-libreswan.5.in b/man/nm-settings-libreswan.5.in
+index 59ac4ee..956fdd0 100644
+--- a/man/nm-settings-libreswan.5.in
++++ b/man/nm-settings-libreswan.5.in
+@@ -56,6 +56,10 @@ parameter of the same name.
+ specifies the remote's public key for RSA authentication.
+ When the 'leftcert' key is defined a default value of "%cert" is assumed.
+ .TP
++.I "authby"
++How the two security gateways should authenticate each other. Corresponds to the
++Libreswan parameter of the same name.
++.TP
+ .I "left"
+ contains the local address that should be used during IKE negotiation. If not specified, the value
+ "%defaultroute" is assumed. Corresponds to the Libreswan parameter of the same name.
+diff --git a/properties/nm-libreswan-editor-plugin.c b/properties/nm-libreswan-editor-plugin.c
+index 0b3e36d..5222b6a 100644
+--- a/properties/nm-libreswan-editor-plugin.c
++++ b/properties/nm-libreswan-editor-plugin.c
+@@ -206,6 +206,8 @@ import_from_file (NMVpnEditorPlugin *self,
+ 			nm_setting_vpn_add_data_item (s_vpn, NM_LIBRESWAN_KEY_DPDACTION, &str[10]);
+ 		else if (g_str_has_prefix (str, "ipsec-interface="))
+ 			nm_setting_vpn_add_data_item (s_vpn, NM_LIBRESWAN_KEY_IPSEC_INTERFACE, &str[16]);
++		else if (g_str_has_prefix (str, "authby="))
++			nm_setting_vpn_add_data_item (s_vpn, NM_LIBRESWAN_KEY_AUTHBY, &str[7]);
+ 		else if (g_str_has_prefix (str, "rightsubnet=")) {
+ 			if (!g_str_has_prefix (str, "rightsubnet=0.0.0.0/0"))
+ 				nm_setting_vpn_add_data_item (s_vpn, NM_LIBRESWAN_KEY_REMOTENETWORK, &str[12]);
+diff --git a/shared/nm-service-defines.h b/shared/nm-service-defines.h
+index 78193f2..3fdf2ef 100644
+--- a/shared/nm-service-defines.h
++++ b/shared/nm-service-defines.h
+@@ -41,6 +41,7 @@
+ #define NM_LIBRESWAN_KEY_LEFTID                     "leftid"
+ #define NM_LIBRESWAN_KEY_LEFTRSASIGKEY              "leftrsasigkey"
+ #define NM_LIBRESWAN_KEY_LEFTCERT                   "leftcert"
++#define NM_LIBRESWAN_KEY_AUTHBY                     "authby"
+ #define NM_LIBRESWAN_KEY_PSK_VALUE                  "pskvalue"
+ #define NM_LIBRESWAN_KEY_PSK_INPUT_MODES            "pskinputmodes"
+ #define NM_LIBRESWAN_KEY_LEFTXAUTHUSER              "leftxauthusername"
+diff --git a/shared/utils.c b/shared/utils.c
+index a1a1c77..c49727c 100644
+--- a/shared/utils.c
++++ b/shared/utils.c
+@@ -110,6 +110,7 @@ nm_libreswan_config_write (gint fd,
+ 	const char *leftcert;
+ 	const char *leftrsasigkey;
+ 	const char *rightrsasigkey;
++	const char *authby;
+ 	const char *remote_network;
+ 	const char *ikev2 = NULL;
+ 	const char *rightid;
+@@ -164,6 +165,7 @@ nm_libreswan_config_write (gint fd,
+ 	leftrsasigkey = nm_setting_vpn_get_data_item (s_vpn, NM_LIBRESWAN_KEY_LEFTRSASIGKEY);
+ 	rightrsasigkey = nm_setting_vpn_get_data_item (s_vpn, NM_LIBRESWAN_KEY_RIGHTRSASIGKEY);
+ 	leftcert = nm_setting_vpn_get_data_item (s_vpn, NM_LIBRESWAN_KEY_LEFTCERT);
++	authby = nm_setting_vpn_get_data_item (s_vpn, NM_LIBRESWAN_KEY_AUTHBY);
+ 	if (leftcert && strlen (leftcert)) {
+ 		WRITE_CHECK (fd, debug_write_fcn, error, " leftcert=%s", leftcert);
+ 		if (!leftrsasigkey)
+@@ -175,8 +177,11 @@ nm_libreswan_config_write (gint fd,
+ 		WRITE_CHECK (fd, debug_write_fcn, error, " leftrsasigkey=%s", leftrsasigkey);
+ 	if (rightrsasigkey && strlen (rightrsasigkey))
+ 		WRITE_CHECK (fd, debug_write_fcn, error, " rightrsasigkey=%s", rightrsasigkey);
+-	if (   !(leftrsasigkey && strlen (leftrsasigkey))
+-	    && !(rightrsasigkey && strlen (rightrsasigkey))) {
++
++	if (authby && strlen (authby)) {
++		WRITE_CHECK (fd, debug_write_fcn, error, " authby=%s", authby);
++	} else if (   !(leftrsasigkey && strlen (leftrsasigkey))
++	           && !(rightrsasigkey && strlen (rightrsasigkey))) {
+ 		WRITE_CHECK (fd, debug_write_fcn, error, " authby=secret");
+ 	}
+ 
+diff --git a/src/nm-libreswan-service.c b/src/nm-libreswan-service.c
+index 93beec0..ae04fa4 100644
+--- a/src/nm-libreswan-service.c
++++ b/src/nm-libreswan-service.c
+@@ -256,6 +256,7 @@ static ValidProperty valid_properties[] = {
+ 	{ NM_LIBRESWAN_KEY_LEFTUSERNAME,               G_TYPE_STRING, 0, 0 },
+ 	{ NM_LIBRESWAN_KEY_LEFTRSASIGKEY,              G_TYPE_STRING, 0, 0 },
+ 	{ NM_LIBRESWAN_KEY_LEFTCERT,                   G_TYPE_STRING, 0, 0 },
++	{ NM_LIBRESWAN_KEY_AUTHBY,                     G_TYPE_STRING, 0, 0 },
+ 	{ NM_LIBRESWAN_KEY_DOMAIN,                     G_TYPE_STRING, 0, 0 },
+ 	{ NM_LIBRESWAN_KEY_DHGROUP,                    G_TYPE_STRING, 0, 0 },
+ 	{ NM_LIBRESWAN_KEY_PFS,                        G_TYPE_STRING, 0, 0 },
+-- 
+2.43.0
+
