@@ -3,10 +3,15 @@
 %else
 %bcond_with libnm_glib
 %endif
+%if 0%{?fedora} < 36 && 0%{?rhel} < 10
+%bcond_with gtk4
+%else
+%bcond_without gtk4
+%endif 
 
-%global real_version     1.2.14
-%global rpm_version      1.2.14
-%global release_version  3
+%global real_version     1.2.18
+%global rpm_version      1.2.18
+%global release_version  2
 
 %global real_version_major %(printf '%s' '%{real_version}' | sed -n 's/^\\([1-9][0-9]*\\.[1-9][0-9]*\\)\\.[1-9][0-9]*$/\\1/p')
 
@@ -22,8 +27,11 @@ License:   GPLv2+
 URL:       http://www.gnome.org/projects/NetworkManager/
 Source0:   https://download.gnome.org/sources/NetworkManager-libreswan/%{real_version_major}/%{name}-%{real_version}.tar.xz
 
-Patch1: 0001-add-dpd-authby-and-ipsec-interface-support.patch
-Patch2: 0002-support-missing-features-ipv4.patch
+Patch1: 0001-service-properties-add-support-for-leftmodecfgclient.patch
+Patch2: 0002-service-use-new-API-to-send-configuration-to-NM.patch
+Patch3: 0003-service-don-t-send-IPv4-config-if-mode-config-client.patch
+Patch4: 0004-service-fix-wrong-refcounting-in-D-Bus-handler-for-C.patch
+Patch5: 0005-service-properties-support-type-hostaddrfamily-clien.patch
 
 BuildRequires: make
 BuildRequires:  gcc
@@ -38,6 +46,10 @@ BuildRequires: intltool gettext
 BuildRequires: NetworkManager-devel >= %{nm_version}
 BuildRequires: NetworkManager-glib-devel >= %{nm_version}
 BuildRequires: libnm-gtk-devel >= %{nma_version}
+%endif
+
+%if %with gtk4
+BuildRequires: libnma-gtk4-devel
 %endif
 
 Requires: NetworkManager >= %{nm_version}
@@ -78,6 +90,9 @@ the libreswan server with NetworkManager (GNOME files).
 %build
 %configure \
         --disable-static \
+%if %with gtk4
+    --with-gtk4 \
+%endif
 %if %without libnm_glib
         --without-libnm-glib \
 %endif
@@ -99,31 +114,32 @@ rm -f %{buildroot}%{_libdir}/NetworkManager/lib*.la
 %{_libexecdir}/nm-libreswan-service
 %{_libexecdir}/nm-libreswan-service-helper
 %{_mandir}/man5/nm-settings-libreswan.5.gz
-%doc AUTHORS ChangeLog NEWS
+%doc AUTHORS NEWS
 %license COPYING
 
 
 %files -n NetworkManager-libreswan-gnome
 %{_libexecdir}/nm-libreswan-auth-dialog
 %{_libdir}/NetworkManager/libnm-vpn-plugin-libreswan-editor.so
-%dir %{_datadir}/gnome-vpn-properties/libreswan
-%{_datadir}/gnome-vpn-properties/libreswan/nm-libreswan-dialog.ui
-%{_datadir}/appdata/network-manager-libreswan.metainfo.xml
+%{_metainfodir}/network-manager-libreswan.metainfo.xml
 
 %if %with libnm_glib
 %{_libdir}/NetworkManager/libnm-*-properties.so
 %{_sysconfdir}/NetworkManager/VPN/nm-libreswan-service.name
 %endif
 
+%if %with gtk4
+%{_libdir}/NetworkManager/libnm-gtk4-vpn-plugin-libreswan-editor.so
+%endif
 
 %changelog
-* Wed Jan 17 2024 Fernando Fernandez Mancera <ferferna@redhat.com> - 1.2.14-3
-- Support point-to-point IPSec tunnel (RHEL-20952)
-- Fix crash in libreswan_nmstate_iface_dpd_rsa (RHEL-20952)
-- Support configuring IPSec mode with 'type' (RHEL-20952)
+* Wed Jan 17 2024 Fernando Fernandez Mancera <ferferna@redhat.com> - 1.2.18-2
+- Support point-to-point IPSec tunnel (RHEL-20690)
+- Fix crash in libreswan_nmstate_iface_dpd_rsa (RHEL-21221)
+- Support configuring IPSec mode with 'type' (RHEL-21554)
 
-* Mon Dec 18 2023 Fernando Fernandez Mancera <ferferna@redhat.com> - 1.2.14-2
-- Add DPD, ipsec-interface and authby support. RHEL-19225
+* Fri Dec 15 2023 Fernando Fernandez Mancera <ferferna@redhat.com> - 1.2.18-1
+- Update to 1.2.18 release
 
 * Mon Aug 09 2021 Mohan Boddu <mboddu@redhat.com> - 1.2.14-1.3
 - Rebuilt for IMA sigs, glibc 2.34, aarch64 flags

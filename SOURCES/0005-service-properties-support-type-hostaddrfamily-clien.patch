@@ -1,0 +1,91 @@
+From b4ba2add64bd9d362fe2e66748f23449f072216b Mon Sep 17 00:00:00 2001
+From: Beniamino Galvani <bgalvani@redhat.com>
+Date: Mon, 15 Jan 2024 13:23:45 +0100
+Subject: [PATCH 5/5] service,properties: support type, hostaddrfamily,
+ clientaddrfamily
+
+Add support for:
+ - type
+ - hostaddrfamily
+ - clientaddrfamily
+
+Since those are very advanced options, don't implement the GUI part
+for now.
+---
+ properties/nm-libreswan-editor-plugin.c |  6 ++++++
+ shared/nm-service-defines.h             |  3 +++
+ shared/utils.c                          | 12 ++++++++++++
+ src/nm-libreswan-service.c              |  3 +++
+ 4 files changed, 24 insertions(+)
+
+diff --git a/properties/nm-libreswan-editor-plugin.c b/properties/nm-libreswan-editor-plugin.c
+index 89243cc..fe85c81 100644
+--- a/properties/nm-libreswan-editor-plugin.c
++++ b/properties/nm-libreswan-editor-plugin.c
+@@ -206,6 +206,12 @@ import_from_file (NMVpnEditorPlugin *self,
+ 			nm_setting_vpn_add_data_item (s_vpn, NM_LIBRESWAN_KEY_IPSEC_INTERFACE, &str[16]);
+ 		else if (g_str_has_prefix (str, "authby="))
+ 			nm_setting_vpn_add_data_item (s_vpn, NM_LIBRESWAN_KEY_AUTHBY, &str[7]);
++		else if (g_str_has_prefix (str, "type="))
++			nm_setting_vpn_add_data_item (s_vpn, NM_LIBRESWAN_KEY_TYPE, str + NM_STRLEN("type="));
++		else if (g_str_has_prefix (str, "hostaddrfamily="))
++			nm_setting_vpn_add_data_item (s_vpn, NM_LIBRESWAN_KEY_HOSTADDRFAMILY, str + NM_STRLEN("hostaddrfamily="));
++		else if (g_str_has_prefix (str, "clientaddrfamily="))
++			nm_setting_vpn_add_data_item (s_vpn, NM_LIBRESWAN_KEY_CLIENTADDRFAMILY, str + NM_STRLEN("clientaddrfamily="));
+ 		else if (g_str_has_prefix (str, "rightsubnet=")) {
+ 			if (!g_str_has_prefix (str, "rightsubnet=0.0.0.0/0"))
+ 				nm_setting_vpn_add_data_item (s_vpn, NM_LIBRESWAN_KEY_REMOTENETWORK, &str[12]);
+diff --git a/shared/nm-service-defines.h b/shared/nm-service-defines.h
+index 14170ad..95e19d4 100644
+--- a/shared/nm-service-defines.h
++++ b/shared/nm-service-defines.h
+@@ -68,6 +68,9 @@
+ #define NM_LIBRESWAN_KEY_FRAGMENTATION              "fragmentation"
+ #define NM_LIBRESWAN_KEY_MOBIKE                     "mobike"
+ #define NM_LIBRESWAN_KEY_IPSEC_INTERFACE            "ipsec-interface"
++#define NM_LIBRESWAN_KEY_TYPE                       "type"
++#define NM_LIBRESWAN_KEY_HOSTADDRFAMILY             "hostaddrfamily"
++#define NM_LIBRESWAN_KEY_CLIENTADDRFAMILY           "clientaddrfamily"
+ 
+ #define NM_LIBRESWAN_IKEV2_NO      "no"
+ #define NM_LIBRESWAN_IKEV2_NEVER   "never"
+diff --git a/shared/utils.c b/shared/utils.c
+index 0bac9e6..9e616f8 100644
+--- a/shared/utils.c
++++ b/shared/utils.c
+@@ -325,6 +325,18 @@ nm_libreswan_config_write (gint fd,
+ 	if (item && strlen (item))
+ 		WRITE_CHECK (fd, debug_write_fcn, error, " ipsec-interface=%s", item);
+ 
++	item = nm_setting_vpn_get_data_item (s_vpn, NM_LIBRESWAN_KEY_TYPE);
++	if (item && strlen (item))
++		WRITE_CHECK (fd, debug_write_fcn, error, " type=%s", item);
++
++	item = nm_setting_vpn_get_data_item (s_vpn, NM_LIBRESWAN_KEY_HOSTADDRFAMILY);
++	if (item && strlen (item))
++		WRITE_CHECK (fd, debug_write_fcn, error, " hostaddrfamily=%s", item);
++
++	item = nm_setting_vpn_get_data_item (s_vpn, NM_LIBRESWAN_KEY_CLIENTADDRFAMILY);
++	if (item && strlen (item))
++		WRITE_CHECK (fd, debug_write_fcn, error, " clientaddrfamily=%s", item);
++
+ 	WRITE_CHECK (fd, debug_write_fcn, error, " nm-configured=yes");
+ 
+ 	WRITE_CHECK_NEWLINE (fd, trailing_newline, debug_write_fcn, error, " auto=add");
+diff --git a/src/nm-libreswan-service.c b/src/nm-libreswan-service.c
+index 0d5c4b8..7e96230 100644
+--- a/src/nm-libreswan-service.c
++++ b/src/nm-libreswan-service.c
+@@ -277,6 +277,9 @@ static ValidProperty valid_properties[] = {
+ 	{ NM_LIBRESWAN_KEY_FRAGMENTATION,              G_TYPE_STRING, 0, 0 },
+ 	{ NM_LIBRESWAN_KEY_MOBIKE,                     G_TYPE_STRING, 0, 0 },
+ 	{ NM_LIBRESWAN_KEY_IPSEC_INTERFACE,            G_TYPE_STRING, 0, 0 },
++	{ NM_LIBRESWAN_KEY_TYPE,                       G_TYPE_STRING, 0, 0 },
++	{ NM_LIBRESWAN_KEY_HOSTADDRFAMILY,             G_TYPE_STRING, 0, 0 },
++	{ NM_LIBRESWAN_KEY_CLIENTADDRFAMILY,           G_TYPE_STRING, 0, 0 },
+ 	/* Ignored option for internal use */
+ 	{ NM_LIBRESWAN_KEY_PSK_INPUT_MODES,            G_TYPE_NONE, 0, 0 },
+ 	{ NM_LIBRESWAN_KEY_XAUTH_PASSWORD_INPUT_MODES, G_TYPE_NONE, 0, 0 },
+-- 
+2.43.0
+
