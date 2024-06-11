@@ -11,7 +11,7 @@
 
 %global real_version     1.2.18
 %global rpm_version      1.2.18
-%global release_version  2
+%global release_version  3
 
 %global real_version_major %(printf '%s' '%{real_version}' | sed -n 's/^\\([1-9][0-9]*\\.[1-9][0-9]*\\)\\.[1-9][0-9]*$/\\1/p')
 
@@ -32,6 +32,8 @@ Patch2: 0002-service-use-new-API-to-send-configuration-to-NM.patch
 Patch3: 0003-service-don-t-send-IPv4-config-if-mode-config-client.patch
 Patch4: 0004-service-fix-wrong-refcounting-in-D-Bus-handler-for-C.patch
 Patch5: 0005-service-properties-support-type-hostaddrfamily-clien.patch
+Patch6: 0006-add-support-leftsubnet.patch
+Patch7: 0007-add-rightcert-property.patch
 
 BuildRequires: make
 BuildRequires:  gcc
@@ -133,6 +135,10 @@ rm -f %{buildroot}%{_libdir}/NetworkManager/lib*.la
 %endif
 
 %changelog
+* Tue May 07 2024 Fernando Fernandez Mancera <ferferna@redhat.com> - 1.2.18-3
+- Support leftsubnet property (RHEL-33376)
+- Support rightcert property (RHEL-33372)
+
 * Wed Jan 17 2024 Fernando Fernandez Mancera <ferferna@redhat.com> - 1.2.18-2
 - Support point-to-point IPSec tunnel (RHEL-20690)
 - Fix crash in libreswan_nmstate_iface_dpd_rsa (RHEL-21221)

@@ -1,0 +1,71 @@
+From 2045cdf3dec79ae7d7b03ca7a081b8c444e242ef Mon Sep 17 00:00:00 2001
+From: Beniamino Galvani <bgalvani@redhat.com>
+Date: Wed, 10 Apr 2024 13:23:56 +0200
+Subject: [PATCH] service,properties: support "leftsubnet"
+
+https://gitlab.gnome.org/GNOME/NetworkManager-libreswan/-/merge_requests/30
+---
+ properties/nm-libreswan-dialog.ui       | 42 ++++++++++++++++++++-----
+ properties/nm-libreswan-editor-plugin.c |  2 ++
+ properties/nm-libreswan-editor.c        | 12 +++++++
+ shared/nm-service-defines.h             |  1 +
+ shared/utils.c                          |  5 +++
+ src/nm-libreswan-service.c              |  1 +
+ 6 files changed, 56 insertions(+), 7 deletions(-)
+
+diff --git a/properties/nm-libreswan-editor-plugin.c b/properties/nm-libreswan-editor-plugin.c
+index fe85c81..bb1685d 100644
+--- a/properties/nm-libreswan-editor-plugin.c
++++ b/properties/nm-libreswan-editor-plugin.c
+@@ -215,6 +215,8 @@ import_from_file (NMVpnEditorPlugin *self,
+ 		else if (g_str_has_prefix (str, "rightsubnet=")) {
+ 			if (!g_str_has_prefix (str, "rightsubnet=0.0.0.0/0"))
+ 				nm_setting_vpn_add_data_item (s_vpn, NM_LIBRESWAN_KEY_REMOTENETWORK, &str[12]);
++		} else if (g_str_has_prefix (str, "leftsubnet=")) {
++			nm_setting_vpn_add_data_item (s_vpn, NM_LIBRESWAN_KEY_LOCALNETWORK, str + NM_STRLEN("leftsubnet="));
+ 		} else if (g_str_has_prefix (str, "leftrsasigkey=")) {
+ 			if (str[14] != '%')
+ 				nm_setting_vpn_add_data_item (s_vpn, NM_LIBRESWAN_KEY_LEFTRSASIGKEY, &str[14]);
+diff --git a/shared/nm-service-defines.h b/shared/nm-service-defines.h
+index 95e19d4..96e5c71 100644
+--- a/shared/nm-service-defines.h
++++ b/shared/nm-service-defines.h
+@@ -62,6 +62,7 @@
+ #define NM_LIBRESWAN_KEY_SALIFETIME                 "salifetime"
+ #define NM_LIBRESWAN_KEY_VENDOR                     "vendor"
+ #define NM_LIBRESWAN_KEY_REMOTENETWORK              "rightsubnet"
++#define NM_LIBRESWAN_KEY_LOCALNETWORK               "leftsubnet"
+ #define NM_LIBRESWAN_KEY_IKEV2                      "ikev2"
+ #define NM_LIBRESWAN_KEY_NARROWING                  "narrowing"
+ #define NM_LIBRESWAN_KEY_REKEY                      "rekey"
+diff --git a/shared/utils.c b/shared/utils.c
+index 9e616f8..926d12d 100644
+--- a/shared/utils.c
++++ b/shared/utils.c
+@@ -222,6 +222,11 @@ nm_libreswan_config_write (gint fd,
+ 		WRITE_CHECK (fd, debug_write_fcn, error, " rightsubnet=%s",
+ 			     remote_network);
+ 
++	item = nm_setting_vpn_get_data_item (s_vpn, NM_LIBRESWAN_KEY_LOCALNETWORK);
++	if (item) {
++		WRITE_CHECK (fd, debug_write_fcn, error, " leftsubnet=%s", item);
++	}
++
+ 	if (!is_ikev2) {
+ 		/* When IKEv1 is in place, we enforce XAUTH: so, use IKE version
+ 		 * also to check if XAUTH conf options should be passed to Libreswan.
+diff --git a/src/nm-libreswan-service.c b/src/nm-libreswan-service.c
+index 7e96230..88c07d7 100644
+--- a/src/nm-libreswan-service.c
++++ b/src/nm-libreswan-service.c
+@@ -271,6 +271,7 @@ static ValidProperty valid_properties[] = {
+ 	{ NM_LIBRESWAN_KEY_SALIFETIME,                 G_TYPE_STRING, 0, 0 },
+ 	{ NM_LIBRESWAN_KEY_VENDOR,                     G_TYPE_STRING, 0, 0 },
+ 	{ NM_LIBRESWAN_KEY_REMOTENETWORK,              G_TYPE_STRING, 0, 0 },
++	{ NM_LIBRESWAN_KEY_LOCALNETWORK,               G_TYPE_STRING, 0, 0 },
+ 	{ NM_LIBRESWAN_KEY_IKEV2,                      G_TYPE_STRING, 0, 0 },
+ 	{ NM_LIBRESWAN_KEY_NARROWING,                  G_TYPE_STRING, 0, 0 },
+ 	{ NM_LIBRESWAN_KEY_REKEY,                      G_TYPE_STRING, 0, 0 },
+-- 
+2.44.0
+
