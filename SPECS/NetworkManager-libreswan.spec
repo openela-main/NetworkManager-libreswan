@@ -11,7 +11,7 @@
 Summary:   NetworkManager VPN plug-in for IPsec VPN
 Name:      NetworkManager-libreswan
 Version:   1.2.10
-Release:   5%{?dist}
+Release:   7%{?dist}
 License:   GPLv2+
 URL:       http://www.gnome.org/projects/NetworkManager/
 Group:     System Environment/Base
@@ -19,6 +19,7 @@ Source0:   https://download.gnome.org/sources/NetworkManager-libreswan/1.2/%{nam
 Patch0:    0001-po-import-translations-from-Red-Hat-translators.patch
 Patch1:    0002-properties-set-advanced-dialog-modal.patch
 Patch2:    0003-service-fix-wrong-refcounting-in-D-Bus-handler-for-C.patch
+Patch3:    0004-ipsec-conf-escaping-cve-2024-9050.patch
 
 BuildRequires: gtk3-devel
 BuildRequires: libnl3-devel
@@ -110,6 +111,12 @@ update-desktop-database &> /dev/null || :
 %endif
 
 %changelog
+* Thu Oct 03 2024 Lubomir Rintel <lkundrak@v3.sk> - 1.2.10-7
+- Unbreak validation of unknown keys
+
+* Wed Sep 25 2024 Lubomir Rintel <lkundrak@v3.sk> - 1.2.10-6
+- Fix improper escaping of Libreswan configuration (CVE-2024-9050)
+
 * Mon Feb  5 2024 Wen Liang <wenliang@redhat.com> - 1.2.10-5
 - Fix crash in libreswan_add_profile_wrong_password (RHEL-13123)
 
