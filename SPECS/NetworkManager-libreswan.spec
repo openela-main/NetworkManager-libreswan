@@ -9,9 +9,9 @@
 %bcond_without gtk4
 %endif 
 
-%global real_version     1.2.18
-%global rpm_version      1.2.18
-%global release_version  3
+%global real_version     1.2.22
+%global rpm_version      1.2.22
+%global release_version  1
 
 %global real_version_major %(printf '%s' '%{real_version}' | sed -n 's/^\\([1-9][0-9]*\\.[1-9][0-9]*\\)\\.[1-9][0-9]*$/\\1/p')
 
@@ -27,13 +27,7 @@ License:   GPLv2+
 URL:       http://www.gnome.org/projects/NetworkManager/
 Source0:   https://download.gnome.org/sources/NetworkManager-libreswan/%{real_version_major}/%{name}-%{real_version}.tar.xz
 
-Patch1: 0001-service-properties-add-support-for-leftmodecfgclient.patch
-Patch2: 0002-service-use-new-API-to-send-configuration-to-NM.patch
-Patch3: 0003-service-don-t-send-IPv4-config-if-mode-config-client.patch
-Patch4: 0004-service-fix-wrong-refcounting-in-D-Bus-handler-for-C.patch
-Patch5: 0005-service-properties-support-type-hostaddrfamily-clien.patch
-Patch6: 0006-add-support-leftsubnet.patch
-Patch7: 0007-add-rightcert-property.patch
+# Patch1: 0001-some.patch
 
 BuildRequires: make
 BuildRequires:  gcc
@@ -135,9 +129,12 @@ rm -f %{buildroot}%{_libdir}/NetworkManager/lib*.la
 %endif
 
 %changelog
-* Tue May 07 2024 Fernando Fernandez Mancera <ferferna@redhat.com> - 1.2.18-3
-- Support leftsubnet property (RHEL-33376)
-- Support rightcert property (RHEL-33372)
+* Wed May 22 2024 Beniamino Galvani <bgalvani@redhat.com> - 1.2.22-1
+- Add IPv6 support (RHEL-21875)
+
+* Wed Apr 17 2024 Íñigo Huguet <ihuguet@redhat.com> - 1.2.20-1
+- Support "leftsubnet" property (RHEL-26776)
+- Support "rightcert" property (RHEL-30370)
 
 * Wed Jan 17 2024 Fernando Fernandez Mancera <ferferna@redhat.com> - 1.2.18-2
 - Support point-to-point IPSec tunnel (RHEL-20690)
