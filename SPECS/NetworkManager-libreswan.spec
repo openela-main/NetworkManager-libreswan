@@ -11,7 +11,7 @@
 
 %global real_version     1.2.22
 %global rpm_version      1.2.22
-%global release_version  1
+%global release_version  4
 
 %global real_version_major %(printf '%s' '%{real_version}' | sed -n 's/^\\([1-9][0-9]*\\.[1-9][0-9]*\\)\\.[1-9][0-9]*$/\\1/p')
 
@@ -28,6 +28,7 @@ URL:       http://www.gnome.org/projects/NetworkManager/
 Source0:   https://download.gnome.org/sources/NetworkManager-libreswan/%{real_version_major}/%{name}-%{real_version}.tar.xz
 
 # Patch1: 0001-some.patch
+Patch1: 0001-ipsec-conf-escaping-cve-2024-9050.patch
 
 BuildRequires: make
 BuildRequires:  gcc
@@ -129,6 +130,12 @@ rm -f %{buildroot}%{_libdir}/NetworkManager/lib*.la
 %endif
 
 %changelog
+* Thu Oct 03 2024 Lubomir Rintel <lkundrak@v3.sk> - 1.2.22-4
+- Unbreak validation of unknown keys
+
+* Wed Sep 25 2024 Lubomir Rintel <lkundrak@v3.sk> - 1.2.22-2
+- Fix improper escaping of Libreswan configuration (CVE-2024-9050)
+
 * Wed May 22 2024 Beniamino Galvani <bgalvani@redhat.com> - 1.2.22-1
 - Add IPv6 support (RHEL-21875)
 
