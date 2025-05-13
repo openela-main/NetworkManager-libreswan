@@ -9,9 +9,9 @@
 %bcond_without gtk4
 %endif 
 
-%global real_version     1.2.22
-%global rpm_version      1.2.22
-%global release_version  4
+%global real_version     1.2.24
+%global rpm_version      1.2.24
+%global release_version  1
 
 %global real_version_major %(printf '%s' '%{real_version}' | sed -n 's/^\\([1-9][0-9]*\\.[1-9][0-9]*\\)\\.[1-9][0-9]*$/\\1/p')
 
@@ -27,8 +27,12 @@ License:   GPLv2+
 URL:       http://www.gnome.org/projects/NetworkManager/
 Source0:   https://download.gnome.org/sources/NetworkManager-libreswan/%{real_version_major}/%{name}-%{real_version}.tar.xz
 
-# Patch1: 0001-some.patch
-Patch1: 0001-ipsec-conf-escaping-cve-2024-9050.patch
+# These are not bugfixes, hence they are also relevant after
+# the next rebase of the source tarball.
+# Patch0001: 0001-some.patch
+
+# Bugfixes that are only relevant until next rebase of the package.
+# Patch1001: 1001-some.patch
 
 BuildRequires: make
 BuildRequires:  gcc
@@ -130,11 +134,12 @@ rm -f %{buildroot}%{_libdir}/NetworkManager/lib*.la
 %endif
 
 %changelog
-* Thu Oct 03 2024 Lubomir Rintel <lkundrak@v3.sk> - 1.2.22-4
-- Unbreak validation of unknown keys
-
-* Wed Sep 25 2024 Lubomir Rintel <lkundrak@v3.sk> - 1.2.22-2
+* Tue Oct 22 2024 Lubomir Rintel <lkundrak@v3.sk> - 1.2.24-1
+- Update to 1.2.24 release
 - Fix improper escaping of Libreswan configuration (CVE-2024-9050)
+
+* Thu Sep 12 2024 Íñigo Huguet <ihuguet@redhat.com> - 1.2.22-2
+- Support require-id-on-certificate (RHEL-58040)
 
 * Wed May 22 2024 Beniamino Galvani <bgalvani@redhat.com> - 1.2.22-1
 - Add IPv6 support (RHEL-21875)
