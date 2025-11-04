@@ -9,9 +9,9 @@
 %bcond_without gtk4
 %endif 
 
-%global real_version     1.2.24
-%global rpm_version      1.2.24
-%global release_version  1
+%global real_version     1.2.27
+%global rpm_version      1.2.27
+%global release_version  2
 
 %global real_version_major %(printf '%s' '%{real_version}' | sed -n 's/^\\([1-9][0-9]*\\.[1-9][0-9]*\\)\\.[1-9][0-9]*$/\\1/p')
 
@@ -24,18 +24,17 @@ Name:      NetworkManager-libreswan
 Version:   %{rpm_version}
 Release:   %{release_version}%{?dist}
 License:   GPLv2+
-URL:       http://www.gnome.org/projects/NetworkManager/
+URL:       https://gitlab.gnome.org/GNOME/NetworkManager-libreswan/
 Source0:   https://download.gnome.org/sources/NetworkManager-libreswan/%{real_version_major}/%{name}-%{real_version}.tar.xz
 
-# These are not bugfixes, hence they are also relevant after
-# the next rebase of the source tarball.
-# Patch0001: 0001-some.patch
-
-# Bugfixes that are only relevant until next rebase of the package.
-# Patch1001: 1001-some.patch
+Patch0:    0001-Export-esp-option.patch
+Patch1:    0002-fix-psk-auth-when-leftid-starts-with-at.patch
+Patch2:    0003-import-export-nm-auto-defaults-no.patch
+Patch3:    0004-sanitize-before-exporting-RHEL-only.patch
+Patch4:    0005-service-don-t-crash-with-malformed-connections.patch
 
 BuildRequires: make
-BuildRequires:  gcc
+BuildRequires: gcc
 BuildRequires: gtk3-devel
 BuildRequires: libnl3-devel
 BuildRequires: NetworkManager-libnm-devel >= %{nm_version}
@@ -134,6 +133,20 @@ rm -f %{buildroot}%{_libdir}/NetworkManager/lib*.la
 %endif
 
 %changelog
+* Thu Oct 23 2025 Vladimír Beneš <vbenes@redhat.com 1.2.27-2
+- Fix potentional crash in malformed imports
+
+* Tue Oct 21 2025 Vladimír Beneš <vbenes@redhat.com 1.2.27-1
+- Update to 1.2.27 version
+- Support leftsendcert in X.509-Based VPN (RHEL-110771)
+- Add support for nm-auto-defaults + symetric import/export
+- Support rightca in ipsec section
+- Esp param properly exported
+
+* Tue Jan 28 2025 Lubomir Rintel <lkundrak@v3.sk> - 1.2.26-1
+- Update to 1.2.26 release
+- Add support for leftsubnets/rightsubnets (RHEL-56553)
+
 * Tue Oct 22 2024 Lubomir Rintel <lkundrak@v3.sk> - 1.2.24-1
 - Update to 1.2.24 release
 - Fix improper escaping of Libreswan configuration (CVE-2024-9050)
