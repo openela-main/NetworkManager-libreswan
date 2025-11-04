@@ -14,18 +14,17 @@
 
 Summary:   NetworkManager VPN plug-in for IPsec VPN
 Name:      NetworkManager-libreswan
-Version:   1.2.24
+Version:   1.2.27
 Release:   2%{?dist}
 License:   GPL-2.0-or-later
 URL:       https://gitlab.gnome.org/GNOME/NetworkManager-libreswan
 Source0:   https://download.gnome.org/sources/NetworkManager-libreswan/1.2/%{name}-%{version}.tar.xz
 
-# These are not bugfixes, hence they are also relevant after
-# the next rebase of the source tarball.
-# Patch0001: 0001-some.patch
-
-# Bugfixes that are only relevant until next rebase of the package.
-# Patch1001: 1001-some.patch
+Patch0:    0001-Export-esp-option.patch
+Patch1:    0002-fix-psk-auth-when-leftid-starts-with-at.patch
+Patch2:    0003-import-export-nm-auto-defaults-no.patch
+Patch3:    0004-sanitize-before-exporting-RHEL-only.patch
+Patch4:    0005-service-don-t-crash-with-malformed-connections.patch
 
 BuildRequires: make
 BuildRequires: gcc
@@ -130,6 +129,20 @@ mv %{buildroot}%{_sysconfdir}/dbus-1 %{buildroot}%{_datadir}/
 
 
 %changelog
+* Thu Oct 23 2025 Vladimír Beneš <vbenes@redhat.com 1.2.27-2
+- Fix potentional crash in malformed items import 
+
+* Wed Oct 22 2025 Vladimír Beneš <vbenes@redhat.com 1.2.27-1
+- Update to 1.2.27 version
+- Support leftsendcert in X.509-Based VPN (RHEL-110773)
+- Add support for nm-auto-defaults + symetric import/export
+- Support rightca in ipsec section
+- Esp param properly exported
+
+* Tue Jan 28 2025 Lubomir Rintel <lkundrak@v3.sk> - 1.2.26-1
+- Update to 1.2.26 release
+- Add support for leftsubnets/rightsubnets (RHEL-56553)
+
 * Tue Oct 29 2024 Troy Dawson <tdawson@redhat.com> - 1.2.24-2
 - Bump release for October 2024 mass rebuild:
   Resolves: RHEL-64018
