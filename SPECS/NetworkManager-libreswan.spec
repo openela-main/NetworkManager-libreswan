@@ -133,15 +133,21 @@ rm -f %{buildroot}%{_libdir}/NetworkManager/lib*.la
 %endif
 
 %changelog
-* Thu Oct 23 2025 Vladimír Beneš <vbenes@redhat.com 1.2.27-2
-- Fix potentional crash in malformed imports
+* Tue Oct 21 2025 Vladimír Beneš <vbenes@redhat.com 1.2.27-2
+- Fix potentional crash in malformed imports 
 
 * Tue Oct 21 2025 Vladimír Beneš <vbenes@redhat.com 1.2.27-1
 - Update to 1.2.27 version
-- Support leftsendcert in X.509-Based VPN (RHEL-110771)
-- Add support for nm-auto-defaults + symetric import/export
+- Add support for nm-auto-defaults + symetric import/export (RHEL-118843)
+- Support leftsendcert in X.509-Based VPN (RHEL-110772)
 - Support rightca in ipsec section
 - Esp param properly exported
+
+* Tue Jul 01 2025 Gris Ge <fge@redhat.com> - 1.2.26-3
+- Fix regression on phase2alg/esp for IKEv1 (RHEL-85768)
+
+* Mon May 12 2025 Lubomir Rintel <lkundrak@v3.sk> - 1.2.26-2
+- Add support for nm-auto-defaults (RHEL-85768)
 
 * Tue Jan 28 2025 Lubomir Rintel <lkundrak@v3.sk> - 1.2.26-1
 - Update to 1.2.26 release
