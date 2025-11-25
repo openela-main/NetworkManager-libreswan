@@ -130,14 +130,17 @@ mv %{buildroot}%{_sysconfdir}/dbus-1 %{buildroot}%{_datadir}/
 
 %changelog
 * Thu Oct 23 2025 Vladimír Beneš <vbenes@redhat.com 1.2.27-2
-- Fix potentional crash in malformed items import 
+- Fix potentional crash in malformed imports
 
 * Wed Oct 22 2025 Vladimír Beneš <vbenes@redhat.com 1.2.27-1
 - Update to 1.2.27 version
-- Support leftsendcert in X.509-Based VPN (RHEL-110773)
-- Add support for nm-auto-defaults + symetric import/export
+- Support leftsendcert in X.509-Based VPN (RHEL-110774)
+- Add support for nm-auto-defaults + symetric import/export (RHEL-118845)
 - Support rightca in ipsec section
 - Esp param properly exported
+
+* Mon May 12 2025 Lubomir Rintel <lkundrak@v3.sk> - 1.2.26-2
+- Add support for nm-auto-defaults (RHEL-85768)
 
 * Tue Jan 28 2025 Lubomir Rintel <lkundrak@v3.sk> - 1.2.26-1
 - Update to 1.2.26 release
