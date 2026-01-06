@@ -14,17 +14,11 @@
 
 Summary:   NetworkManager VPN plug-in for IPsec VPN
 Name:      NetworkManager-libreswan
-Version:   1.2.27
-Release:   2%{?dist}
+Version:   1.2.29
+Release:   1%{?dist}
 License:   GPL-2.0-or-later
 URL:       https://gitlab.gnome.org/GNOME/NetworkManager-libreswan
 Source0:   https://download.gnome.org/sources/NetworkManager-libreswan/1.2/%{name}-%{version}.tar.xz
-
-Patch0:    0001-Export-esp-option.patch
-Patch1:    0002-fix-psk-auth-when-leftid-starts-with-at.patch
-Patch2:    0003-import-export-nm-auto-defaults-no.patch
-Patch3:    0004-sanitize-before-exporting-RHEL-only.patch
-Patch4:    0005-service-don-t-crash-with-malformed-connections.patch
 
 BuildRequires: make
 BuildRequires: gcc
@@ -129,6 +123,12 @@ mv %{buildroot}%{_sysconfdir}/dbus-1 %{buildroot}%{_datadir}/
 
 
 %changelog
+* Wed Dec 10 2025 Gris Ge <fge@redhat.com> - 1.2.29-1
+- Upgrade to 1.2.29
+- Support leftprotoport and rightprotoport options. (RHEL-130909)
+- Fix error on duplicate key 'phase2alg'. (RHEL-131235)
+- Fix import connection with RSA key. (RHEL-127867)
+
 * Thu Oct 23 2025 Vladimír Beneš <vbenes@redhat.com 1.2.27-2
 - Fix potentional crash in malformed imports
 
