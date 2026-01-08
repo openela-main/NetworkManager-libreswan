@@ -7,11 +7,11 @@
 %bcond_with gtk4
 %else
 %bcond_without gtk4
-%endif 
+%endif
 
-%global real_version     1.2.27
-%global rpm_version      1.2.27
-%global release_version  2
+%global real_version     1.2.29
+%global rpm_version      1.2.29
+%global release_version  1
 
 %global real_version_major %(printf '%s' '%{real_version}' | sed -n 's/^\\([1-9][0-9]*\\.[1-9][0-9]*\\)\\.[1-9][0-9]*$/\\1/p')
 
@@ -27,11 +27,6 @@ License:   GPLv2+
 URL:       https://gitlab.gnome.org/GNOME/NetworkManager-libreswan/
 Source0:   https://download.gnome.org/sources/NetworkManager-libreswan/%{real_version_major}/%{name}-%{real_version}.tar.xz
 
-Patch0:    0001-Export-esp-option.patch
-Patch1:    0002-fix-psk-auth-when-leftid-starts-with-at.patch
-Patch2:    0003-import-export-nm-auto-defaults-no.patch
-Patch3:    0004-sanitize-before-exporting-RHEL-only.patch
-Patch4:    0005-service-don-t-crash-with-malformed-connections.patch
 
 BuildRequires: make
 BuildRequires: gcc
@@ -133,8 +128,13 @@ rm -f %{buildroot}%{_libdir}/NetworkManager/lib*.la
 %endif
 
 %changelog
+* Wed Dec 10 2025 Gris Ge <fge@redhat.com> - 1.2.29-1
+- Upgrade to 1.2.29
+- Fix error on duplicate key 'phase2alg'. (RHEL-131232)
+- Fix import connection with RSA key. (RHEL-127865)
+
 * Tue Oct 21 2025 Vladimír Beneš <vbenes@redhat.com 1.2.27-2
-- Fix potentional crash in malformed imports 
+- Fix potentional crash in malformed imports
 
 * Tue Oct 21 2025 Vladimír Beneš <vbenes@redhat.com 1.2.27-1
 - Update to 1.2.27 version
