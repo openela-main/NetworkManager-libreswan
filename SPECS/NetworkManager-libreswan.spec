@@ -9,8 +9,8 @@
 %bcond_without gtk4
 %endif
 
-%global real_version     1.2.29
-%global rpm_version      1.2.29
+%global real_version     1.2.30
+%global rpm_version      1.2.30
 %global release_version  1
 
 %global real_version_major %(printf '%s' '%{real_version}' | sed -n 's/^\\([1-9][0-9]*\\.[1-9][0-9]*\\)\\.[1-9][0-9]*$/\\1/p')
@@ -26,7 +26,6 @@ Release:   %{release_version}%{?dist}
 License:   GPLv2+
 URL:       https://gitlab.gnome.org/GNOME/NetworkManager-libreswan/
 Source0:   https://download.gnome.org/sources/NetworkManager-libreswan/%{real_version_major}/%{name}-%{real_version}.tar.xz
-
 
 BuildRequires: make
 BuildRequires: gcc
@@ -128,20 +127,31 @@ rm -f %{buildroot}%{_libdir}/NetworkManager/lib*.la
 %endif
 
 %changelog
-* Wed Dec 10 2025 Gris Ge <fge@redhat.com> - 1.2.29-1
+* Mon Jan 12 2026 Vladimír Beneš <vbenes@redhat.com> - 1.2.30-1
+- Upgrade to 1.2.30
+- Declare supports-safe-private-file-access (RHEL-140610)
+
+* Tue Dec 09 2025 Gris Ge <fge@redhat.com> - 1.2.29-1
 - Upgrade to 1.2.29
-- Fix error on duplicate key 'phase2alg'. (RHEL-131232)
-- Fix import connection with RSA key. (RHEL-127865)
+- Support creating both ends of IPsec (Libreswan) tunnels. (RHEL-85789)
+- Support leftprotoport and rightprotoport options. (RHEL-130907)
+- Fix error on duplicate key 'phase2alg'. (RHEL-131233)
+- Fix import connection with RSA key. (RHEL-127863)
 
-* Tue Oct 21 2025 Vladimír Beneš <vbenes@redhat.com 1.2.27-2
-- Fix potentional crash in malformed imports
+* Thu Oct 23 2025 Vladimír Beneš <vbenes@redhat.com> - 1.2.27-4
+- Fix potentional crash in malformed items import
 
-* Tue Oct 21 2025 Vladimír Beneš <vbenes@redhat.com 1.2.27-1
-- Update to 1.2.27 version
-- Add support for nm-auto-defaults + symetric import/export (RHEL-118843)
-- Support leftsendcert in X.509-Based VPN (RHEL-110772)
-- Support rightca in ipsec section
-- Esp param properly exported
+* Tue Oct 21 2025 Vladimír Beneš <vbenes@redhat.com> - 1.2.27-3
+- Fix small nm-auto-defaults issue
+
+* Mon Oct 20 2025 Vladimír Beneš <vbenes@redhat.com> - 1.2.27-2
+- Symetric import/export with nm-auto-default (RHEL-122306)
+- Esp param properly exported (RHEL-122626)
+- Correct leftid export when it contains @
+
+* Thu Oct 02 2025 Vladimír Beneš <vbenes@redhat.com> - 1.2.27-1
+- Update to later upstream release to address regressions (RHEL-56551)
+- Support rightca in ipsec section (RHEL-118819)
 
 * Tue Jul 01 2025 Gris Ge <fge@redhat.com> - 1.2.26-3
 - Fix regression on phase2alg/esp for IKEv1 (RHEL-85768)
