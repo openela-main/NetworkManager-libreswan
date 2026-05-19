@@ -14,7 +14,7 @@
 
 Summary:   NetworkManager VPN plug-in for IPsec VPN
 Name:      NetworkManager-libreswan
-Version:   1.2.29
+Version:   1.2.30
 Release:   1%{?dist}
 License:   GPL-2.0-or-later
 URL:       https://gitlab.gnome.org/GNOME/NetworkManager-libreswan
@@ -123,21 +123,30 @@ mv %{buildroot}%{_sysconfdir}/dbus-1 %{buildroot}%{_datadir}/
 
 
 %changelog
-* Wed Dec 10 2025 Gris Ge <fge@redhat.com> - 1.2.29-1
+* Mon Jan 12 2026 Vladimír Beneš <vbenes@redhat.com> - 1.2.30-1
+- Upgrade to 1.2.30
+- Declare supports-safe-private-file-access (RHEL-140608)
+
+* Tue Dec 09 2025 Gris Ge <fge@redhat.com> - 1.2.29-1
 - Upgrade to 1.2.29
-- Support leftprotoport and rightprotoport options. (RHEL-130909)
-- Fix error on duplicate key 'phase2alg'. (RHEL-131235)
-- Fix import connection with RSA key. (RHEL-127867)
+- Support creating both ends of IPsec (Libreswan) tunnels. (RHEL-67307)
+- Support leftprotoport and rightprotoport options. (RHEL-130888)
+- Fix error on duplicate key 'phase2alg'. (RHEL-128213)
+- Fix import connection with RSA key. (RHEL-125174)
 
-* Thu Oct 23 2025 Vladimír Beneš <vbenes@redhat.com 1.2.27-2
-- Fix potentional crash in malformed imports
+* Thu Oct 23 2025 Vladimír Beneš <vbenes@redhat.com> - 1.2.27-4
+- Fix potentional crash in malformed items import
 
-* Wed Oct 22 2025 Vladimír Beneš <vbenes@redhat.com 1.2.27-1
-- Update to 1.2.27 version
-- Support leftsendcert in X.509-Based VPN (RHEL-110774)
-- Add support for nm-auto-defaults + symetric import/export (RHEL-118845)
-- Support rightca in ipsec section
-- Esp param properly exported
+* Tue Oct 21 2025 Vladimír Beneš <vbenes@redhat.com> - 1.2.27-3
+- Fix a regression in nm-auto-defaults=yes
+
+* Mon Oct 20 2025 Vladimír Beneš <vbenes@redhat.com> - 1.2.27-2
+- Symetric import/export with nm-auto-default (RHEL-119641)
+- Esp param properly exported (RHEL-119653)
+- Correct leftid export when it contains @
+
+* Wed Oct 01 2025 Lubomir Rintel <lkundrak@v3.sk> - 1.2.27-1
+- Update to later upstream release to address regressions (RHEL-56551)
 
 * Mon May 12 2025 Lubomir Rintel <lkundrak@v3.sk> - 1.2.26-2
 - Add support for nm-auto-defaults (RHEL-85768)
