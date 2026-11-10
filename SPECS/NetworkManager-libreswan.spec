@@ -15,10 +15,11 @@
 Summary:   NetworkManager VPN plug-in for IPsec VPN
 Name:      NetworkManager-libreswan
 Version:   1.2.30
-Release:   1%{?dist}
+Release:   2%{?dist}
 License:   GPL-2.0-or-later
 URL:       https://gitlab.gnome.org/GNOME/NetworkManager-libreswan
 Source0:   https://download.gnome.org/sources/NetworkManager-libreswan/1.2/%{name}-%{version}.tar.xz
+Patch0:    RHEL-155372-fix-leftsubnets-and-rightsubnets.patch
 
 BuildRequires: make
 BuildRequires: gcc
@@ -123,6 +124,9 @@ mv %{buildroot}%{_sysconfdir}/dbus-1 %{buildroot}%{_datadir}/
 
 
 %changelog
+* Fri Mar 27 2026 Gris Ge <fge@redhat.com> - 1.2.30-2
+- Fix support of leftsubnets and rightsubnets. (RHEL-155372)
+
 * Mon Jan 12 2026 Vladimír Beneš <vbenes@redhat.com> - 1.2.30-1
 - Upgrade to 1.2.30
 - Declare supports-safe-private-file-access (RHEL-140608)
