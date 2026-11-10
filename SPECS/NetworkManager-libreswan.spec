@@ -11,7 +11,7 @@
 
 %global real_version     1.2.30
 %global rpm_version      1.2.30
-%global release_version  1
+%global release_version  2
 
 %global real_version_major %(printf '%s' '%{real_version}' | sed -n 's/^\\([1-9][0-9]*\\.[1-9][0-9]*\\)\\.[1-9][0-9]*$/\\1/p')
 
@@ -26,6 +26,7 @@ Release:   %{release_version}%{?dist}
 License:   GPLv2+
 URL:       https://gitlab.gnome.org/GNOME/NetworkManager-libreswan/
 Source0:   https://download.gnome.org/sources/NetworkManager-libreswan/%{real_version_major}/%{name}-%{real_version}.tar.xz
+Patch0:    RHEL-85786-fix-leftsubnets-and-rightsubnets.patch
 
 BuildRequires: make
 BuildRequires: gcc
@@ -127,6 +128,9 @@ rm -f %{buildroot}%{_libdir}/NetworkManager/lib*.la
 %endif
 
 %changelog
+* Fri Mar 27 2026 Gris Ge <fge@redhat.com> - 1.2.30-2
+- Fix the support of leftsubnets and rightsubnets. (RHEL-161465)
+
 * Mon Jan 12 2026 Vladimír Beneš <vbenes@redhat.com> - 1.2.30-1
 - Upgrade to 1.2.30
 - Declare supports-safe-private-file-access (RHEL-140610)
