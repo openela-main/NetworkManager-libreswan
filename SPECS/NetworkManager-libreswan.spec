@@ -11,7 +11,7 @@
 
 %global real_version     1.2.30
 %global rpm_version      1.2.30
-%global release_version  2
+%global release_version  3
 
 %global real_version_major %(printf '%s' '%{real_version}' | sed -n 's/^\\([1-9][0-9]*\\.[1-9][0-9]*\\)\\.[1-9][0-9]*$/\\1/p')
 
@@ -27,6 +27,11 @@ License:   GPLv2+
 URL:       https://gitlab.gnome.org/GNOME/NetworkManager-libreswan/
 Source0:   https://download.gnome.org/sources/NetworkManager-libreswan/%{real_version_major}/%{name}-%{real_version}.tar.xz
 Patch0:    RHEL-85786-fix-leftsubnets-and-rightsubnets.patch
+Patch1:    RHEL-276207-0001-service-dont-fail-established-tunnel-on-ipsec-up-exit-status.patch
+Patch2:    RHEL-276082-0002-shared-add-a-helper-to-classify-address-family.patch
+Patch3:    RHEL-276082-0003-service-stop-deriving-tunnel-address-family-from-PLUTO_VERB.patch
+Patch4:    RHEL-276082-0004-shared-cover-4in6-and-6in4-ipsec-conf-round-trips.patch
+Patch5:    RHEL-276082-0005-service-allow-subnet-to-subnet-tunnels-without-mode-config.patch
 
 BuildRequires: make
 BuildRequires: gcc
@@ -128,6 +133,10 @@ rm -f %{buildroot}%{_libdir}/NetworkManager/lib*.la
 %endif
 
 %changelog
+* Mon Oct 05 2026 Peter Rakšány <praksany@redhat.com> - 1.2.30-3
+- Fix established tunnel teardown on ipsec up exit status. (RHEL-276207)
+- Fix mixed address family (4in6/6in4) tunnels. (RHEL-276082)
+
 * Fri Mar 27 2026 Gris Ge <fge@redhat.com> - 1.2.30-2
 - Fix the support of leftsubnets and rightsubnets. (RHEL-161465)
 
