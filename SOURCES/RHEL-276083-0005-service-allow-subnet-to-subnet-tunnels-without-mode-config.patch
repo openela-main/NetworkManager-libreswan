@@ -1,0 +1,102 @@
+From eb71ef69b4172d53600e6c3a798db579d8bb43c2 Mon Sep 17 00:00:00 2001
+From: Josephine Pfeiffer <josie@redhat.com>
+Date: Thu, 20 Aug 2026 13:34:11 +0200
+Subject: [PATCH 4/4] service: allow subnet-to-subnet tunnels without a mode
+ config address
+
+Mode config is on by default, so a connection asks the peer for an
+address even when it declares its own subnets, and a subnet-to-subnet
+peer rightly sends none. Failing over an address the tunnel never needed
+left 4in6 and 6in4 still reporting connect-failed after the family fix.
+Require it only when the connection has no subnets of its own.
+
+Resolves: https://redhat.atlassian.net/browse/RHEL-176474
+---
+ src/nm-libreswan-service.c | 65 +++++++++++++++++++++++---------------
+ 1 file changed, 40 insertions(+), 25 deletions(-)
+
+diff --git a/src/nm-libreswan-service.c b/src/nm-libreswan-service.c
+index a4d8c05..0458d4e 100644
+--- a/src/nm-libreswan-service.c
++++ b/src/nm-libreswan-service.c
+@@ -1432,37 +1432,52 @@ handle_callback(NMDBusLibreswanHelper *object,
+ 	if (dyn_addr_needed) {
+ 		const char *sourceip = lookup_string(env, "PLUTO_MY_SOURCEIP");
+ 		int inner_family = nm_libreswan_addr_family(sourceip);
+-		gboolean inner_v6;
+ 
+ 		if (inner_family == AF_UNSPEC) {
+-			_LOGW("IP Address is missing");
+-			goto out;
+-		}
+-		inner_v6 = (inner_family == AF_INET6);
+-
+-		/* IP address */
+-		variant = addr_to_gvariant(sourceip, inner_family);
+-		g_variant_builder_add(ip_config[inner_v6],
+-		                      "{sv}",
+-		                      inner_v6 ? NM_VPN_PLUGIN_IP6_CONFIG_ADDRESS
+-		                               : NM_VPN_PLUGIN_IP4_CONFIG_ADDRESS,
+-		                      variant);
+-		if (!inner_v6) {
+-			/* no PTP is expressed as PTP == ADDRESS */
++			const char *rightsubnet =
++				nm_setting_vpn_get_data_item(s_vpn, NM_LIBRESWAN_KEY_RIGHTSUBNET);
++			const char *rightsubnets =
++				nm_setting_vpn_get_data_item(s_vpn, NM_LIBRESWAN_KEY_RIGHTSUBNETS);
++			gboolean has_own_subnets =
++				nm_setting_vpn_get_data_item(s_vpn, NM_LIBRESWAN_KEY_LEFTSUBNET)
++				|| nm_setting_vpn_get_data_item(s_vpn, NM_LIBRESWAN_KEY_LEFTSUBNETS);
++			gboolean peer_subnet_is_specific =
++				(rightsubnets && !NM_IN_STRSET(rightsubnets, "0.0.0.0/0", "::/0"))
++				|| (rightsubnet && !NM_IN_STRSET(rightsubnet, "0.0.0.0/0", "::/0"));
++
++			if (!has_own_subnets || !peer_subnet_is_specific) {
++				_LOGW("IP Address is missing");
++				goto out;
++			}
++			_LOGI("No mode config address offered, using the configured subnets");
++		} else {
++			gboolean inner_v6 = (inner_family == AF_INET6);
++
++			/* IP address */
++			variant = addr_to_gvariant(sourceip, inner_family);
++			nm_assert(variant);
+ 			g_variant_builder_add(ip_config[inner_v6],
+ 			                      "{sv}",
+-			                      NM_VPN_PLUGIN_IP4_CONFIG_PTP,
++			                      inner_v6 ? NM_VPN_PLUGIN_IP6_CONFIG_ADDRESS
++			                               : NM_VPN_PLUGIN_IP4_CONFIG_ADDRESS,
+ 			                      variant);
+-		}
++			if (!inner_v6) {
++				/* no PTP is expressed as PTP == ADDRESS */
++				g_variant_builder_add(ip_config[inner_v6],
++				                      "{sv}",
++				                      NM_VPN_PLUGIN_IP4_CONFIG_PTP,
++				                      variant);
++			}
+ 
+-		/* Netmask */
+-		variant = g_variant_new_uint32(inner_v6 ? 128 : 32);
+-		g_variant_builder_add(ip_config[inner_v6],
+-		                      "{sv}",
+-		                      inner_v6 ? NM_VPN_PLUGIN_IP6_CONFIG_PREFIX
+-		                               : NM_VPN_PLUGIN_IP4_CONFIG_PREFIX,
+-		                      variant);
+-		has_ip_config[inner_v6] = TRUE;
++			/* Netmask */
++			variant = g_variant_new_uint32(inner_v6 ? 128 : 32);
++			g_variant_builder_add(ip_config[inner_v6],
++			                      "{sv}",
++			                      inner_v6 ? NM_VPN_PLUGIN_IP6_CONFIG_PREFIX
++			                               : NM_VPN_PLUGIN_IP4_CONFIG_PREFIX,
++			                      variant);
++			has_ip_config[inner_v6] = TRUE;
++		}
+ 	}
+ 
+ 	/* DNS */
+-- 
+2.55.0
+
